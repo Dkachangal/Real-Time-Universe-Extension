@@ -1,0 +1,15 @@
+.theme-container {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #282c34;
+  color: white;
+  font-family: sans-serif;
+}
+
+.dashboard {
+  text-align: center;
+}
