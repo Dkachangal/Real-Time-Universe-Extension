@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import './style.css' // Make sure this matches your exact filename
+import './style.css' 
+import { BoxGeometry } from 'three'
 
 function Box(props) {
   const meshRef = useRef()
@@ -17,13 +18,12 @@ function Box(props) {
       onClick={() => setActive(!active)}
       onPointerOver={() => setHover(true)}
       onPointerOut={() => setHover(false)}>
-      <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial color={hovered ? 'hotpink' : 'orange'} />
+      <BoxGeometry  />
+      <meshStandardMaterial color={hovered ? 'red' : 'orange'} />
     </mesh>
   )
 }
 
-// Export a single 3D scene component
 export default function ThreeScene() {
   return (
     <Canvas style={{ width: '100%', height: '400px' }}>

@@ -1,12 +1,217 @@
-import React from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import * as THREE from 'three';
+import stars from '../../data-pipeline/starsHYG3.json';
 import './App.css';
-import { Texture } from 'three';
-import ThreeScene from '../components/index'
+import { Html } from '@react-three/drei';
+
+
+const vertexShader = `
+  attribute float aSize;
+  attribute vec3 aColor;
+  varying vec3 vColor;
+  
+  void main() {
+    vColor = aColor; // Pass color to fragment
+    vec4 mvPosition = viewMatrix * modelMatrix * vec4(position, 1.0);
+    gl_Position = projectionMatrix * mvPosition;
+    gl_PointSize = aSize;
+  }
+`;
+
+const fragmentShader = `
+  varying vec3 vColor;
+  
+  void main() {
+    vec2 coord = gl_PointCoord - vec2(0.5);
+    float dist = length(coord);
+    
+    // Discard corners to make a circle
+    if (dist > 0.5) discard;
+    
+    // Create a soft Gaussian-like glow
+    // 1.0 at center, fading out to 0 at the edge
+    float intensity = 1.0 - (dist * 2.0);
+    
+    // Sharpen the core of the star so it burns bright, but keeps the soft edge
+    intensity = pow(intensity, 1.5); 
+
+    gl_FragColor = vec4(vColor, intensity);
+  }
+`;
+
+const getStarColorFloats = (ci) => {
+  let bv = Math.max(-0.4, Math.min(ci, 2.0));
+  let r, g, b, t;
+
+  if (bv < 0.0) {
+    t = (bv + 0.4) / 0.4;
+    r = 0.61 + (0.11 * t) + (0.1 * t * t);
+    g = 0.70 + (0.07 * t) + (0.1 * t * t);
+    b = 1.0;
+  } else if (bv < 0.4) {
+    t = bv / 0.4;
+    r = 0.83 + (0.17 * t);
+    g = 0.87 + (0.11 * t);
+    b = 1.0;
+  } else if (bv < 1.6) {
+    t = (bv - 0.4) / 1.2;
+    r = 1.0;
+    g = 0.98 - (0.16 * t);
+    b = 1.0 - (0.47 * t) + (0.1 * t * t);
+  } else {
+    t = (bv - 1.6) / 0.4;
+    r = 1.0;
+    g = 0.82 - (0.1 * t * t);
+    b = 0.63 - (0.13 * t * t);
+  }
+  return [r, g, b];
+};
+
+const PlanetariumControls = () => {
+  const { camera, gl } = useThree();
+  const mouse = useRef({ x: 0, y: 0, isDragging: false });
+  const rotation = useRef({ yaw: 0, pitch: 0 });
+
+  useEffect(() => {
+    const handleMouseDown = () => { mouse.current.isDragging = true; };
+    const handleMouseUp = () => { mouse.current.isDragging = false; };
+    const handleMouseMove = (e) => {
+      if (!mouse.current.isDragging) return;
+      rotation.current.yaw += e.movementX * 0.0015;
+      rotation.current.pitch += e.movementY * 0.003;
+      rotation.current.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rotation.current.pitch));
+    };
+
+    const dom = gl.domElement;
+    dom.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('mousemove', handleMouseMove);
+
+    return () => {
+      dom.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, [gl]);
+
+  useFrame(() => {
+    camera.position.set(0, 0, 0);
+    const euler = new THREE.Euler(rotation.current.pitch, rotation.current.yaw, 0, 'YXZ');
+    camera.quaternion.setFromEuler(euler);
+  });
+
+  return null;
+};
 
 const App = () => {
+  const { positions, sizes, colors } = useMemo(() => {
+    const pos = new Float32Array(stars.length * 3);
+    const col = new Float32Array(stars.length * 3);
+    const siz = new Float32Array(stars.length);
+
+    stars.forEach((star, index) => {
+      const i3 = index * 3;
+
+      const magnitudeVec = Math.sqrt(star.x * star.x + star.y * star.y + star.z * star.z);
+      const radius = 290;
+      pos[i3] = (star.x / magnitudeVec) * radius;
+      pos[i3 + 1] = (star.y / magnitudeVec) * radius;
+      pos[i3 + 2] = (star.z / magnitudeVec) * radius;
+
+      const [r, g, b] = getStarColorFloats(star.ci || 0);
+      col[i3] = r;
+      col[i3 + 1] = g;
+      col[i3 + 2] = b;
+
+      const magBase = Math.max(0, 6.5 - star.mag);
+      let calcSize = Math.pow(magBase, 1.4) * 0.8 + 1.0;
+
+
+      if (star.mag <= 1.0) calcSize += 3.0;
+
+      siz[index] = calcSize;
+    });
+
+    return { positions: pos, sizes: siz, colors: col };
+  }, []);
+
+  // Calculate labels for the brightest famous stars
+  // Calculate labels for the brightest famous stars
+  const labeledStars = useMemo(() => {
+    return stars
+      .filter(star => star.mag < 1.5 && star.proper)
+      .map(star => {
+        // Spherical Math
+        const magnitudeVec = Math.sqrt(star.x * star.x + star.y * star.y + star.z * star.z);
+        const radius = 290;
+
+        // COLOR CONVERSION: Float to CSS RGB
+        const [r, g, b] = getStarColorFloats(star.ci || 0);
+        const cssColor = `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
+
+        return {
+          name: star.proper,
+          position: [
+            (star.x / magnitudeVec) * radius,
+            (star.y / magnitudeVec) * radius,
+            (star.z / magnitudeVec) * radius
+          ],
+          color: cssColor // Store the CSS color in the object
+        };
+      });
+  }, []);
+
   return (
-    <div className="theme-container">
-      <ThreeScene />
+    <div style={{ width: '100%', height: '100%' }}>
+      <Canvas camera={{ position: [0, 0, 0], fov: 60 }} style={{ width: '100vw', height: '100vh' }}>
+        <PlanetariumControls />
+        <ambientLight intensity={0.1} color='white' />
+
+        <mesh>
+          <sphereGeometry args={[300, 64, 64]} />
+          <meshBasicMaterial
+            side={THREE.BackSide}
+            transparent={true}
+            opacity={0.3}
+            color="#080b14"
+          />
+        </mesh>
+
+        <points>
+          <bufferGeometry>
+            <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+            <bufferAttribute attach="attributes-aSize" args={[sizes, 1]} />
+            <bufferAttribute attach="attributes-aColor" args={[colors, 3]} />
+          </bufferGeometry>
+
+          <shaderMaterial
+            attach="material"
+            vertexShader={vertexShader}
+            fragmentShader={fragmentShader}
+            transparent={true}
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+          />
+        </points>
+        {labeledStars.map((star, i) => (
+          <Html key={i} position={star.position} center zIndexRange={[100, 0]}>
+            <div style={{
+              color: star.color,
+              marginTop: '15px',
+              fontFamily: 'sans-serif',
+              fontSize: '10px',
+              letterSpacing: '2px',
+              textTransform: 'uppercase',
+              opacity: 0.8,
+              pointerEvents: 'none',
+              userSelect: 'none'
+            }}>
+              {star.name}
+            </div>
+          </Html>
+        ))}
+      </Canvas>
     </div>
   );
 };
