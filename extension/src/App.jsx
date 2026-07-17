@@ -1,18 +1,113 @@
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useMemo, Suspense } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import stars from '../../data-pipeline/starsHYG3.json';
+import nonStars from '../../data-pipeline/non-stars.json';
 import './App.css';
-import { Html } from '@react-three/drei';
 
+// 1. IMPORT BILLBOARD HERE!
+import { Html, useTexture, Billboard } from '@react-three/drei'; 
 
+// --- DEEP SKY OBJECTS LOGIC ---
+const textureMap = {
+  "Large Magellanic Cloud": { file: "Cloud.jpg", color: "#d1d5db", label: "LMC" },
+  "Pleiades": { file: "Pleiades.png", color: "#7dd3fc", label: "Pleiades" },
+  "Helix nebula": { file: "EyeOfGod.png", color: "#22d3ee", label: "Helix Nebula" },
+  "Sombrero galaxy": { file: "Sombrero.png", color: "#fef3c7", label: "Sombrero" },
+  "Triangulum galaxy": { file: "Triangulum.png", color: "#fb923c", label: "Triangulum" },
+  "Pin-wheel nebula": { file: "m31.png", color: "#e5e7eb", label: "Andromeda (M31)" }
+};
+
+const DeepSkyObject = ({ data, config }) => {
+  const texture = useTexture(`/${config.file}`);
+
+  const magnitudeVec = Math.sqrt(data.x * data.x + data.y * data.y + data.z * data.z);
+  const radius = 290;
+  const position = [
+    (data.x / magnitudeVec) * radius,
+    (data.y / magnitudeVec) * radius,
+    (data.z / magnitudeVec) * radius
+  ];
+
+  return (
+    <group position={position}>
+      {/* 1. The Galaxy Image */}
+      <Billboard>
+        <mesh scale={[15, 15, 1]}>
+          <planeGeometry args={[1, 1]} />
+          <shaderMaterial
+            transparent={true}
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+            uniforms={{ tDiffuse: { value: texture } }}
+            vertexShader={`
+              varying vec2 vUv;
+              void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+              }
+            `}
+            fragmentShader={`
+              uniform sampler2D tDiffuse;
+              varying vec2 vUv;
+              void main() {
+                vec4 texColor = texture2D(tDiffuse, vUv);
+                float dist = distance(vUv, vec2(0.5));
+                float mask = smoothstep(0.5, 0.25, dist);
+                gl_FragColor = vec4(texColor.rgb * mask, texColor.a * mask);
+              }
+            `}
+          />
+        </mesh>
+      </Billboard>
+
+      {/* 2. The Label */}
+      <Html center zIndexRange={[100, 0]}>
+        <div style={{
+          color: config.color, // Using the hardcoded vibe color
+          marginTop: '30px', // Extra padding for larger objects
+          fontFamily: 'sans-serif',
+          fontSize: '10px',
+          letterSpacing: '2px',
+          textTransform: 'uppercase',
+          opacity: 0.9,
+          pointerEvents: 'none',
+          userSelect: 'none',
+          textShadow: '0px 0px 5px rgba(0,0,0,0.8)' // Adds readability against the starfield
+        }}>
+          {config.label}
+        </div>
+      </Html>
+    </group>
+  );
+};
+
+const DeepSkyManager = () => {
+  const activeObjects = useMemo(() => {
+    return nonStars
+      .filter(obj => textureMap[obj.name])
+      .map(obj => ({
+        ...obj,
+        config: textureMap[obj.name] 
+      }));
+  }, []);
+
+  return (
+    <>
+      {activeObjects.map((obj, i) => (
+        <DeepSkyObject key={i} data={obj} config={obj.config} />
+      ))}
+    </>
+  );
+};
+// --- SHADERS ---
 const vertexShader = `
   attribute float aSize;
   attribute vec3 aColor;
   varying vec3 vColor;
   
   void main() {
-    vColor = aColor; // Pass color to fragment
+    vColor = aColor; 
     vec4 mvPosition = viewMatrix * modelMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * mvPosition;
     gl_PointSize = aSize;
@@ -25,21 +120,14 @@ const fragmentShader = `
   void main() {
     vec2 coord = gl_PointCoord - vec2(0.5);
     float dist = length(coord);
-    
-    // Discard corners to make a circle
     if (dist > 0.5) discard;
-    
-    // Create a soft Gaussian-like glow
-    // 1.0 at center, fading out to 0 at the edge
     float intensity = 1.0 - (dist * 2.0);
-    
-    // Sharpen the core of the star so it burns bright, but keeps the soft edge
     intensity = pow(intensity, 1.5); 
-
     gl_FragColor = vec4(vColor, intensity);
   }
 `;
 
+// --- COLOR MATH ---
 const getStarColorFloats = (ci) => {
   let bv = Math.max(-0.4, Math.min(ci, 2.0));
   let r, g, b, t;
@@ -127,7 +215,6 @@ const App = () => {
       const magBase = Math.max(0, 6.5 - star.mag);
       let calcSize = Math.pow(magBase, 1.4) * 0.8 + 1.0;
 
-
       if (star.mag <= 1.0) calcSize += 3.0;
 
       siz[index] = calcSize;
@@ -136,17 +223,13 @@ const App = () => {
     return { positions: pos, sizes: siz, colors: col };
   }, []);
 
-  // Calculate labels for the brightest famous stars
-  // Calculate labels for the brightest famous stars
   const labeledStars = useMemo(() => {
     return stars
       .filter(star => star.mag < 1.5 && star.proper)
       .map(star => {
-        // Spherical Math
         const magnitudeVec = Math.sqrt(star.x * star.x + star.y * star.y + star.z * star.z);
         const radius = 290;
 
-        // COLOR CONVERSION: Float to CSS RGB
         const [r, g, b] = getStarColorFloats(star.ci || 0);
         const cssColor = `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
 
@@ -157,7 +240,7 @@ const App = () => {
             (star.y / magnitudeVec) * radius,
             (star.z / magnitudeVec) * radius
           ],
-          color: cssColor // Store the CSS color in the object
+          color: cssColor 
         };
       });
   }, []);
@@ -194,6 +277,7 @@ const App = () => {
             blending={THREE.AdditiveBlending}
           />
         </points>
+        
         {labeledStars.map((star, i) => (
           <Html key={i} position={star.position} center zIndexRange={[100, 0]}>
             <div style={{
@@ -211,6 +295,11 @@ const App = () => {
             </div>
           </Html>
         ))}
+
+        <Suspense fallback={null}>
+          <DeepSkyManager/>
+        </Suspense>
+
       </Canvas>
     </div>
   );
