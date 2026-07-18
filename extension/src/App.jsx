@@ -25,12 +25,10 @@ const TimeProvider = ({ children }) => {
 
 // --- NEW: DYNAMIC SUN COMPONENT ---
 const DynamicSun = () => {
-  const sunRef = useRef();
   const timeRef = useContext(TimeContext);
 
-  useFrame(() => {
-    if (!sunRef.current) return;
-
+  // Helper to calculate orbital position so we can use it in state
+  const getSunPos = () => {
     const now = timeRef.current.utcTime;
     const jd = (now.getTime() / 86400000) + 2440587.5;
     const d = jd - 2451545.0; 
@@ -50,15 +48,34 @@ const DynamicSun = () => {
     const y = radius * Math.cos(epsRad) * Math.sin(lambdaRad);
     const z = radius * Math.sin(epsRad) * Math.sin(lambdaRad);
 
-    // Orbital math outputs Z-up, so we apply the Three.js X, Z, -Y swap
-    sunRef.current.position.set(x, z, -y);
+    // Return the Cartesian coordinates with our X, Z, -Y swap
+    return [x, z, -y];
+  };
+
+  // Set the initial position into React state
+  const [sunPos, setSunPos] = React.useState(getSunPos());
+
+  useFrame(() => {
+    const newPos = getSunPos();
+    
+    // To prevent React from lagging with 60fps state updates, 
+    // we only update the state if the Sun physically moves a meaningful distance.
+    // (In a real-time simulation, it moves 1 degree per day, so it stays firmly locked)
+    if (
+      Math.abs(sunPos[0] - newPos[0]) > 0.1 ||
+      Math.abs(sunPos[1] - newPos[1]) > 0.1 ||
+      Math.abs(sunPos[2] - newPos[2]) > 0.1
+    ) {
+      setSunPos(newPos);
+    }
   });
 
   return (
-    <group ref={sunRef}>
+    // Passing the state array directly into the position prop rigidly locks the HTML!
+    <group position={sunPos}>
       <Billboard>
         <mesh>
-          <planeGeometry args={[18, 18]} />
+          <planeGeometry args={[30, 30]} />
           <shaderMaterial
             transparent={true}
             blending={THREE.AdditiveBlending}
@@ -74,12 +91,9 @@ const DynamicSun = () => {
               varying vec2 vUv;
               void main() {
                 float dist = distance(vUv, vec2(0.5));
-                if (dist > 0.5) discard; // Removes the yellow box edges
+                if (dist > 0.5) discard; 
                 
-                // Creates a smooth radial fade
                 float alpha = smoothstep(0.5, 0.0, dist);
-                
-                // Core is bright white/yellow, edges are deep orange
                 vec3 color = mix(vec3(1.0, 0.5, 0.0), vec3(1.0, 0.95, 0.8), smoothstep(0.4, 0.0, dist));
                 
                 gl_FragColor = vec4(color, alpha);
@@ -89,7 +103,7 @@ const DynamicSun = () => {
         </mesh>
       </Billboard>
       <Html center zIndexRange={[100, 0]}>
-        <div style={{ color: '#fcd34d', marginTop: '25px', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', pointerEvents: 'none' }}>
+        <div style={{ color: '#fcd34d', marginTop: '55px', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', pointerEvents: 'none' }}>
           Sun
         </div>
       </Html>
@@ -136,6 +150,45 @@ const StarSphere = ({ children, positions, sizes, colors, labeledStars }) => {
       </group>
     </group>
   );
+};
+
+// Converts standard B-V Color Index to WebGL RGB floats
+const bvToRGB = (bv) => {
+  // If the catalog is missing the CI data, default to a standard white star
+  if (bv === null || bv === undefined) return [0.9, 0.9, 1.0];
+
+  // Clamp the index to the standard astronomical range (-0.4 to 2.0)
+  let t = Math.max(-0.4, Math.min(bv, 2.0));
+  let r = 0, g = 0, b = 0;
+
+  if (t < 0.0) {
+    // Hot Blue stars
+    r = 0.61 + 0.11 * (t + 0.4) / 0.4;
+    g = 0.70 + 0.07 * (t + 0.4) / 0.4;
+    b = 1.0;
+  } else if (t < 0.4) {
+    // Blue-White to White stars
+    r = 0.83 + 0.17 * (t / 0.4);
+    g = 0.87 + 0.11 * (t / 0.4);
+    b = 1.0;
+  } else if (t < 1.6) {
+    // Yellow to Orange stars
+    r = 1.0;
+    g = 0.98 - 0.16 * (t - 0.4) / 1.2;
+    b = t < 1.0 ? 1.0 - 0.37 * (t - 0.4) / 0.6 : 0.63 - 0.63 * (t - 1.0) / 0.6;
+  } else {
+    // Cool Red dwarfs
+    r = 1.0;
+    g = 0.82 - 0.5 * (t - 1.6) / 0.4;
+    b = 0.0;
+  }
+
+  // Ensure strict float bounds for the WebGL shader
+  return [
+    Math.max(0, Math.min(1, r)),
+    Math.max(0, Math.min(1, g)),
+    Math.max(0, Math.min(1, b))
+  ];
 };
 
 const CompassOverlay = () => {
@@ -199,12 +252,11 @@ const DeepSkyObject = ({ data, config }) => {
   const texture = useTexture(`/${config.file}`);
   const magV = Math.sqrt(data.x ** 2 + data.y ** 2 + data.z ** 2);
 
-  // REMOVED THE DOUBLE-SWAP. non-stars.json is already Y-up!
-// PERFECTED AXIS MAPPING
-const pos = [
+
+  const pos = [
     (data.x / magV) * 290,
-    (data.y / magV) * 290,   // y goes to y
-    (-data.z / magV) * 290   // z goes to -z
+    (data.y / magV) * 290,
+    (-data.z / magV) * 290
   ];
 
   return (
@@ -212,17 +264,17 @@ const pos = [
       <Billboard>
         <mesh scale={[15, 15, 1]}>
           <planeGeometry args={[1, 1]} />
-          <shaderMaterial 
-            transparent={true} 
-            blending={THREE.AdditiveBlending} 
-            uniforms={{ tDiffuse: { value: texture } }} 
-            vertexShader={`varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`} 
-            fragmentShader={`uniform sampler2D tDiffuse; varying vec2 vUv; void main() { vec4 texColor = texture2D(tDiffuse, vUv); float dist = distance(vUv, vec2(0.5)); float mask = smoothstep(0.5, 0.25, dist); gl_FragColor = vec4(texColor.rgb * mask, texColor.a * mask); }`} 
+          <shaderMaterial
+            transparent={true}
+            blending={THREE.AdditiveBlending}
+            uniforms={{ tDiffuse: { value: texture } }}
+            vertexShader={`varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`}
+            fragmentShader={`uniform sampler2D tDiffuse; varying vec2 vUv; void main() { vec4 texColor = texture2D(tDiffuse, vUv); float dist = distance(vUv, vec2(0.5)); float mask = smoothstep(0.5, 0.25, dist); gl_FragColor = vec4(texColor.rgb * mask, texColor.a * mask); }`}
           />
         </mesh>
       </Billboard>
       <Html center zIndexRange={[100, 0]}>
-        <div style={{ color: config.color, marginTop: '30px', fontSize: '10px', textTransform: 'uppercase', pointerEvents: 'none' }}>
+        <div style={{ color: config.color, marginTop: '30px', fontSize: '9px', textTransform: 'uppercase', pointerEvents: 'none' }}>
           {config.label}
         </div>
       </Html>
@@ -272,11 +324,11 @@ const App = () => {
   const { positions, sizes, colors } = useMemo(() => {
     // Determine how many actual stars we have after filtering the Sun
     const realStars = stars.filter(s => s.proper !== "Sun");
-    
+
     const pos = new Float32Array(realStars.length * 3);
     const col = new Float32Array(realStars.length * 3);
     const siz = new Float32Array(realStars.length);
-    
+
     realStars.forEach((s, i) => {
       const magV = Math.sqrt(s.x ** 2 + s.y ** 2 + s.z ** 2);
 
@@ -285,19 +337,23 @@ const App = () => {
       pos[i * 3 + 1] = (s.z / magV) * 290;
       pos[i * 3 + 2] = (-s.y / magV) * 290;
 
-      const [r, g, b] = [0.8, 0.9, 1.0];
-      col[i * 3] = r; col[i * 3 + 1] = g; col[i * 3 + 2] = b;
-      siz[i] = Math.pow(Math.max(0, 6.5 - s.mag), 1.4) * 0.8 + 1.0;
+      const [r, g, b] = bvToRGB(s.ci);
+      col[i * 3] = r;
+      col[i * 3 + 1] = g;
+      col[i * 3 + 2] = b;
+      siz[i] = (Math.pow(Math.max(0, 6.5 - s.mag), 1.4) * 0.8 + 1.0) * 1.5;
     });
     return { positions: pos, sizes: siz, colors: col };
   }, []);
 
   const labeledStars = useMemo(() => stars.filter(s => s.mag < 1.5 && s.proper && s.proper !== "Sun").map(s => {
     const magV = Math.sqrt(s.x ** 2 + s.y ** 2 + s.z ** 2);
+    const [r, g, b] = bvToRGB(s.ci);
+    const cssColor = `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
     return {
       name: s.proper,
       position: [(s.x / magV) * 290, (s.z / magV) * 290, (-s.y / magV) * 290], // AXIS SWAP
-      color: 'white'
+      color: cssColor
     };
   }), []);
 
