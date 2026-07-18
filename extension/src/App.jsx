@@ -239,6 +239,51 @@ const CompassOverlay = () => {
   );
 };
 
+const SkyRadarOverlay = () => {
+  return (
+    <div style={{
+      position: 'absolute',
+      bottom: '30px',
+      right: '135px', // Sits perfectly to the left of your 85px compass
+      width: '85px',
+      height: '85px',
+      borderRadius: '50%',
+      background: 'rgba(15, 15, 20, 0.65)',
+      backdropFilter: 'blur(10px)',
+      WebkitBackdropFilter: 'blur(10px)',
+      border: '1px solid rgba(255, 255, 255, 0.1)',
+      // Inner shadow gives it a 3D spherical "bowl" look
+      boxShadow: 'inset 0 0 20px rgba(0,0,0,0.8), 0 8px 32px rgba(0, 0, 0, 0.5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      pointerEvents: 'none',
+      zIndex: 1000,
+      overflow: 'hidden'
+    }}>
+      
+      {/* Subtle Crosshairs for the Zenith (Center) */}
+      <div style={{ position: 'absolute', width: '100%', height: '1px', background: 'rgba(255,255,255,0.05)' }} />
+      <div style={{ position: 'absolute', width: '1px', height: '100%', background: 'rgba(255,255,255,0.05)' }} />
+
+      {/* The Dynamic Inner Ball */}
+      <div id="radar-dot" style={{
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        width: '10px',
+        height: '10px',
+        borderRadius: '50%',
+        background: '#38bdf8', // Premium cyan accent
+        boxShadow: '0 0 10px #38bdf8, inset 0 0 4px rgba(255,255,255,0.8)',
+        transform: 'translate(-50%, -50%)',
+        transition: 'opacity 0.2s ease', // Only transition opacity, not transform!
+        willChange: 'transform' // Hardware acceleration for buttery movement
+      }} />
+    </div>
+  );
+};
+
 const textureMap = {
   "Large Magellanic Cloud": { file: "Cloud.jpg", color: "#d1d5db", label: "LMC" },
   "Pleiades": { file: "Pleiades.png", color: "#7dd3fc", label: "Pleiades" },
@@ -309,11 +354,33 @@ const PlanetariumControls = () => {
   }, []);
 
   useFrame(() => {
+    // 1. Update Camera
     camera.quaternion.setFromEuler(new THREE.Euler(rot.current.pitch, rot.current.yaw, 0, 'YXZ'));
+    
+    // 2. Sync Compass
     const compassDisc = document.getElementById('compass-disc');
     if (compassDisc) {
       const yawDeg = rot.current.yaw * (180 / Math.PI);
       compassDisc.style.transform = `rotate(${yawDeg}deg)`;
+    }
+
+    // 3. Sync Sky Radar (Trackball)
+    const radarDot = document.getElementById('radar-dot');
+    if (radarDot) {
+      // Max pixel distance the inner ball can travel from the center
+      const maxRadius = 35; 
+      
+      // Map Pitch to distance from center (cos(90deg) = 0 center, cos(0deg) = 1 edge)
+      const distance = Math.cos(rot.current.pitch) * maxRadius;
+      
+      // Project Yaw to X/Y coordinates
+      const dotX = Math.sin(-rot.current.yaw) * distance;
+      const dotY = -Math.cos(-rot.current.yaw) * distance;
+      
+      radarDot.style.transform = `translate(calc(-50% + ${dotX}px), calc(-50% + ${dotY}px))`;
+      
+      // Optional premium touch: Dim the glowing ball slightly if looking below the horizon
+      radarDot.style.opacity = rot.current.pitch < 0 ? 0.3 : 1.0;
     }
   });
 
@@ -375,6 +442,7 @@ const App = () => {
         </TimeProvider>
       </Canvas>
       <CompassOverlay />
+      <SkyRadarOverlay />
     </div>
   );
 };
