@@ -1,80 +1,228 @@
-import React, { useRef, useEffect, useMemo, Suspense } from 'react';
+import React, { useRef, useEffect, useMemo, Suspense, useContext } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import stars from '../../data-pipeline/starsHYG3.json';
 import nonStars from '../../data-pipeline/non-stars.json';
 import './App.css';
+import { Html, useTexture, Billboard } from '@react-three/drei';
 
-// 1. IMPORT BILLBOARD HERE!
-import { Html, useTexture, Billboard } from '@react-three/drei'; 
+const GLOBAL_CONFIG = {
+  LATITUDE: 28.47,  // Greater Noida
+  LONGITUDE: 77.50, // Greater Noida
+  GYRO: { yaw: 0, pitch: 0, roll: 0 }
+};
 
-// --- DEEP SKY OBJECTS LOGIC ---
+const TimeContext = React.createContext();
+
+const TimeProvider = ({ children }) => {
+  const timeRef = useRef({ utcTime: new Date(), delta: 0 });
+  useFrame((state, delta) => {
+    timeRef.current.utcTime = new Date(timeRef.current.utcTime.getTime() + delta * 1000);
+    timeRef.current.delta = delta;
+  });
+  return <TimeContext.Provider value={timeRef}>{children}</TimeContext.Provider>;
+};
+
+// --- NEW: DYNAMIC SUN COMPONENT ---
+const DynamicSun = () => {
+  const sunRef = useRef();
+  const timeRef = useContext(TimeContext);
+
+  useFrame(() => {
+    if (!sunRef.current) return;
+
+    const now = timeRef.current.utcTime;
+    const jd = (now.getTime() / 86400000) + 2440587.5;
+    const d = jd - 2451545.0; 
+
+    const L = (280.460 + 0.9856474 * d) % 360;
+    const g = (357.528 + 0.9856003 * d) % 360;
+    const gRad = g * (Math.PI / 180);
+
+    const lambda = L + 1.915 * Math.sin(gRad) + 0.020 * Math.sin(2 * gRad);
+    const lambdaRad = lambda * (Math.PI / 180);
+
+    const epsilon = 23.439 - 0.0000004 * d;
+    const epsRad = epsilon * (Math.PI / 180);
+
+    const radius = 290;
+    const x = radius * Math.cos(lambdaRad);
+    const y = radius * Math.cos(epsRad) * Math.sin(lambdaRad);
+    const z = radius * Math.sin(epsRad) * Math.sin(lambdaRad);
+
+    // Orbital math outputs Z-up, so we apply the Three.js X, Z, -Y swap
+    sunRef.current.position.set(x, z, -y);
+  });
+
+  return (
+    <group ref={sunRef}>
+      <Billboard>
+        <mesh>
+          <planeGeometry args={[18, 18]} />
+          <shaderMaterial
+            transparent={true}
+            blending={THREE.AdditiveBlending}
+            depthWrite={false}
+            vertexShader={`
+              varying vec2 vUv; 
+              void main() { 
+                vUv = uv; 
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); 
+              }
+            `}
+            fragmentShader={`
+              varying vec2 vUv;
+              void main() {
+                float dist = distance(vUv, vec2(0.5));
+                if (dist > 0.5) discard; // Removes the yellow box edges
+                
+                // Creates a smooth radial fade
+                float alpha = smoothstep(0.5, 0.0, dist);
+                
+                // Core is bright white/yellow, edges are deep orange
+                vec3 color = mix(vec3(1.0, 0.5, 0.0), vec3(1.0, 0.95, 0.8), smoothstep(0.4, 0.0, dist));
+                
+                gl_FragColor = vec4(color, alpha);
+              }
+            `}
+          />
+        </mesh>
+      </Billboard>
+      <Html center zIndexRange={[100, 0]}>
+        <div style={{ color: '#fcd34d', marginTop: '25px', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', pointerEvents: 'none' }}>
+          Sun
+        </div>
+      </Html>
+    </group>
+  );
+};
+
+const StarSphere = ({ children, positions, sizes, colors, labeledStars }) => {
+  const starsGroupRef = useRef();
+  const timeRef = useContext(TimeContext);
+
+  useFrame(() => {
+    if (!starsGroupRef.current) return;
+
+    const now = timeRef.current.utcTime;
+    const jd = (now.getTime() / 86400000) + 2440587.5;
+    const d = jd - 2451545.0;
+    const gmst = 280.46061837 + 360.98564736629 * d;
+    const lst = gmst + GLOBAL_CONFIG.LONGITUDE;
+
+    // THE FIX: Added + 90 to align Three.js East with Astronomy South
+    const rotationY = -((lst + 90) % 360) * (Math.PI / 180);
+    starsGroupRef.current.rotation.y = rotationY;
+  });
+
+  return (
+    <group rotation={[-(90 - GLOBAL_CONFIG.LATITUDE) * (Math.PI / 180), 0, 0]}>
+      <group ref={starsGroupRef}>
+        <points>
+          <bufferGeometry>
+            <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+            <bufferAttribute attach="attributes-aSize" args={[sizes, 1]} />
+            <bufferAttribute attach="attributes-aColor" args={[colors, 3]} />
+          </bufferGeometry>
+          <shaderMaterial attach="material" vertexShader={vertexShader} fragmentShader={fragmentShader} transparent={true} depthWrite={false} blending={THREE.AdditiveBlending} />
+        </points>
+
+        {labeledStars.map((star, i) => (
+          <Html key={i} position={star.position} center zIndexRange={[100, 0]}>
+            <div style={{ color: star.color, fontSize: '9px', textTransform: 'uppercase', pointerEvents: 'none', marginTop: 25 }}>{star.name}</div>
+          </Html>
+        ))}
+        {children}
+      </group>
+    </group>
+  );
+};
+
+const CompassOverlay = () => {
+  return (
+    <div style={{
+      position: 'absolute',
+      bottom: '30px',
+      right: '30px',
+      width: '85px',
+      height: '85px',
+      borderRadius: '50%',
+      background: 'rgba(15, 15, 20, 0.65)',
+      backdropFilter: 'blur(10px)',
+      WebkitBackdropFilter: 'blur(10px)',
+      border: '1px solid rgba(255, 255, 255, 0.1)',
+      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      pointerEvents: 'none',
+      zIndex: 1000,
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+      fontSize: '11px',
+      fontWeight: 600,
+      letterSpacing: '0.5px'
+    }}>
+      <div id="compass-disc" style={{
+        position: 'relative',
+        width: '100%',
+        height: '100%',
+      }}>
+        <span style={{ position: 'absolute', top: '8px', left: '50%', transform: 'translateX(-50%)', color: '#ef4444' }}>N</span>
+        <span style={{ position: 'absolute', bottom: '8px', left: '50%', transform: 'translateX(-50%)', color: '#a1a1aa' }}>S</span>
+        <span style={{ position: 'absolute', top: '50%', right: '8px', transform: 'translateY(-50%)', color: '#a1a1aa' }}>E</span>
+        <span style={{ position: 'absolute', top: '50%', left: '8px', transform: 'translateY(-50%)', color: '#a1a1aa' }}>W</span>
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '3px',
+          height: '3px',
+          borderRadius: '50%',
+          backgroundColor: 'rgba(255, 255, 255, 0.4)'
+        }} />
+      </div>
+    </div>
+  );
+};
+
 const textureMap = {
   "Large Magellanic Cloud": { file: "Cloud.jpg", color: "#d1d5db", label: "LMC" },
   "Pleiades": { file: "Pleiades.png", color: "#7dd3fc", label: "Pleiades" },
   "Helix nebula": { file: "EyeOfGod.png", color: "#22d3ee", label: "Helix Nebula" },
   "Sombrero galaxy": { file: "Sombrero.png", color: "#fef3c7", label: "Sombrero" },
   "Triangulum galaxy": { file: "Triangulum.png", color: "#fb923c", label: "Triangulum" },
-  "Pin-wheel nebula": { file: "m31.png", color: "#e5e7eb", label: "Andromeda (M31)" }
+  "m31": { file: "m31.png", color: "#e5e7eb", label: "M31" } // Fixed!
 };
 
 const DeepSkyObject = ({ data, config }) => {
   const texture = useTexture(`/${config.file}`);
+  const magV = Math.sqrt(data.x ** 2 + data.y ** 2 + data.z ** 2);
 
-  const magnitudeVec = Math.sqrt(data.x * data.x + data.y * data.y + data.z * data.z);
-  const radius = 290;
-  const position = [
-    (data.x / magnitudeVec) * radius,
-    (data.y / magnitudeVec) * radius,
-    (data.z / magnitudeVec) * radius
+  // REMOVED THE DOUBLE-SWAP. non-stars.json is already Y-up!
+// PERFECTED AXIS MAPPING
+const pos = [
+    (data.x / magV) * 290,
+    (data.y / magV) * 290,   // y goes to y
+    (-data.z / magV) * 290   // z goes to -z
   ];
 
   return (
-    <group position={position}>
-      {/* 1. The Galaxy Image */}
+    <group position={pos}>
       <Billboard>
         <mesh scale={[15, 15, 1]}>
           <planeGeometry args={[1, 1]} />
-          <shaderMaterial
-            transparent={true}
-            depthWrite={false}
-            blending={THREE.AdditiveBlending}
-            uniforms={{ tDiffuse: { value: texture } }}
-            vertexShader={`
-              varying vec2 vUv;
-              void main() {
-                vUv = uv;
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-              }
-            `}
-            fragmentShader={`
-              uniform sampler2D tDiffuse;
-              varying vec2 vUv;
-              void main() {
-                vec4 texColor = texture2D(tDiffuse, vUv);
-                float dist = distance(vUv, vec2(0.5));
-                float mask = smoothstep(0.5, 0.25, dist);
-                gl_FragColor = vec4(texColor.rgb * mask, texColor.a * mask);
-              }
-            `}
+          <shaderMaterial 
+            transparent={true} 
+            blending={THREE.AdditiveBlending} 
+            uniforms={{ tDiffuse: { value: texture } }} 
+            vertexShader={`varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`} 
+            fragmentShader={`uniform sampler2D tDiffuse; varying vec2 vUv; void main() { vec4 texColor = texture2D(tDiffuse, vUv); float dist = distance(vUv, vec2(0.5)); float mask = smoothstep(0.5, 0.25, dist); gl_FragColor = vec4(texColor.rgb * mask, texColor.a * mask); }`} 
           />
         </mesh>
       </Billboard>
-
-      {/* 2. The Label */}
       <Html center zIndexRange={[100, 0]}>
-        <div style={{
-          color: config.color, // Using the hardcoded vibe color
-          marginTop: '30px', // Extra padding for larger objects
-          fontFamily: 'sans-serif',
-          fontSize: '10px',
-          letterSpacing: '2px',
-          textTransform: 'uppercase',
-          opacity: 0.9,
-          pointerEvents: 'none',
-          userSelect: 'none',
-          textShadow: '0px 0px 5px rgba(0,0,0,0.8)' // Adds readability against the starfield
-        }}>
+        <div style={{ color: config.color, marginTop: '30px', fontSize: '10px', textTransform: 'uppercase', pointerEvents: 'none' }}>
           {config.label}
         </div>
       </Html>
@@ -83,110 +231,38 @@ const DeepSkyObject = ({ data, config }) => {
 };
 
 const DeepSkyManager = () => {
-  const activeObjects = useMemo(() => {
-    return nonStars
-      .filter(obj => textureMap[obj.name])
-      .map(obj => ({
-        ...obj,
-        config: textureMap[obj.name] 
-      }));
-  }, []);
-
-  return (
-    <>
-      {activeObjects.map((obj, i) => (
-        <DeepSkyObject key={i} data={obj} config={obj.config} />
-      ))}
-    </>
-  );
+  const active = useMemo(() => nonStars.filter(obj => textureMap[obj.name]).map(obj => ({ ...obj, config: textureMap[obj.name] })), []);
+  return <>{active.map((obj, i) => <DeepSkyObject key={i} data={obj} config={obj.config} />)}</>;
 };
-// --- SHADERS ---
-const vertexShader = `
-  attribute float aSize;
-  attribute vec3 aColor;
-  varying vec3 vColor;
-  
-  void main() {
-    vColor = aColor; 
-    vec4 mvPosition = viewMatrix * modelMatrix * vec4(position, 1.0);
-    gl_Position = projectionMatrix * mvPosition;
-    gl_PointSize = aSize;
-  }
-`;
 
-const fragmentShader = `
-  varying vec3 vColor;
-  
-  void main() {
-    vec2 coord = gl_PointCoord - vec2(0.5);
-    float dist = length(coord);
-    if (dist > 0.5) discard;
-    float intensity = 1.0 - (dist * 2.0);
-    intensity = pow(intensity, 1.5); 
-    gl_FragColor = vec4(vColor, intensity);
-  }
-`;
-
-// --- COLOR MATH ---
-const getStarColorFloats = (ci) => {
-  let bv = Math.max(-0.4, Math.min(ci, 2.0));
-  let r, g, b, t;
-
-  if (bv < 0.0) {
-    t = (bv + 0.4) / 0.4;
-    r = 0.61 + (0.11 * t) + (0.1 * t * t);
-    g = 0.70 + (0.07 * t) + (0.1 * t * t);
-    b = 1.0;
-  } else if (bv < 0.4) {
-    t = bv / 0.4;
-    r = 0.83 + (0.17 * t);
-    g = 0.87 + (0.11 * t);
-    b = 1.0;
-  } else if (bv < 1.6) {
-    t = (bv - 0.4) / 1.2;
-    r = 1.0;
-    g = 0.98 - (0.16 * t);
-    b = 1.0 - (0.47 * t) + (0.1 * t * t);
-  } else {
-    t = (bv - 1.6) / 0.4;
-    r = 1.0;
-    g = 0.82 - (0.1 * t * t);
-    b = 0.63 - (0.13 * t * t);
-  }
-  return [r, g, b];
-};
+const vertexShader = `attribute float aSize; attribute vec3 aColor; varying vec3 vColor; void main() { vColor = aColor; vec4 mvPosition = viewMatrix * modelMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mvPosition; gl_PointSize = aSize; }`;
+const fragmentShader = `varying vec3 vColor; void main() { vec2 coord = gl_PointCoord - vec2(0.5); float dist = length(coord); if (dist > 0.5) discard; float intensity = 1.0 - (dist * 2.0); intensity = pow(intensity, 1.5); gl_FragColor = vec4(vColor, intensity); }`;
 
 const PlanetariumControls = () => {
-  const { camera, gl } = useThree();
-  const mouse = useRef({ x: 0, y: 0, isDragging: false });
-  const rotation = useRef({ yaw: 0, pitch: 0 });
+  const { camera } = useThree();
+  const mouse = useRef({ isDragging: false });
+  const rot = useRef({ yaw: 0, pitch: 0 });
 
   useEffect(() => {
-    const handleMouseDown = () => { mouse.current.isDragging = true; };
-    const handleMouseUp = () => { mouse.current.isDragging = false; };
-    const handleMouseMove = (e) => {
-      if (!mouse.current.isDragging) return;
-      rotation.current.yaw += e.movementX * 0.0015;
-      rotation.current.pitch += e.movementY * 0.003;
-      rotation.current.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rotation.current.pitch));
+    const handleMove = (e) => {
+      if (mouse.current.isDragging) {
+        rot.current.yaw += e.movementX * 0.0015;
+        rot.current.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rot.current.pitch + e.movementY * 0.0015));
+      }
     };
-
-    const dom = gl.domElement;
-    dom.addEventListener('mousedown', handleMouseDown);
-    window.addEventListener('mouseup', handleMouseUp);
-    window.addEventListener('mousemove', handleMouseMove);
-
-    return () => {
-      dom.removeEventListener('mousedown', handleMouseDown);
-      window.removeEventListener('mouseup', handleMouseUp);
-      window.removeEventListener('mousemove', handleMouseMove);
-    };
-  }, [gl]);
+    window.addEventListener('mousedown', () => mouse.current.isDragging = true);
+    window.addEventListener('mouseup', () => mouse.current.isDragging = false);
+    window.addEventListener('mousemove', handleMove);
+    return () => window.removeEventListener('mousemove', handleMove);
+  }, []);
 
   useFrame(() => {
-    camera.position.set(0, 0, 0);
-    const euler = new THREE.Euler(rotation.current.pitch, rotation.current.yaw, 0, 'YXZ');
-    camera.quaternion.setFromEuler(euler);
+    camera.quaternion.setFromEuler(new THREE.Euler(rot.current.pitch, rot.current.yaw, 0, 'YXZ'));
+    const compassDisc = document.getElementById('compass-disc');
+    if (compassDisc) {
+      const yawDeg = rot.current.yaw * (180 / Math.PI);
+      compassDisc.style.transform = `rotate(${yawDeg}deg)`;
+    }
   });
 
   return null;
@@ -194,113 +270,55 @@ const PlanetariumControls = () => {
 
 const App = () => {
   const { positions, sizes, colors } = useMemo(() => {
-    const pos = new Float32Array(stars.length * 3);
-    const col = new Float32Array(stars.length * 3);
-    const siz = new Float32Array(stars.length);
+    // Determine how many actual stars we have after filtering the Sun
+    const realStars = stars.filter(s => s.proper !== "Sun");
+    
+    const pos = new Float32Array(realStars.length * 3);
+    const col = new Float32Array(realStars.length * 3);
+    const siz = new Float32Array(realStars.length);
+    
+    realStars.forEach((s, i) => {
+      const magV = Math.sqrt(s.x ** 2 + s.y ** 2 + s.z ** 2);
 
-    stars.forEach((star, index) => {
-      const i3 = index * 3;
+      // AXIS SWAP: Z becomes Y, Y becomes -Z
+      pos[i * 3] = (s.x / magV) * 290;
+      pos[i * 3 + 1] = (s.z / magV) * 290;
+      pos[i * 3 + 2] = (-s.y / magV) * 290;
 
-      const magnitudeVec = Math.sqrt(star.x * star.x + star.y * star.y + star.z * star.z);
-      const radius = 290;
-      pos[i3] = (star.x / magnitudeVec) * radius;
-      pos[i3 + 1] = (star.y / magnitudeVec) * radius;
-      pos[i3 + 2] = (star.z / magnitudeVec) * radius;
-
-      const [r, g, b] = getStarColorFloats(star.ci || 0);
-      col[i3] = r;
-      col[i3 + 1] = g;
-      col[i3 + 2] = b;
-
-      const magBase = Math.max(0, 6.5 - star.mag);
-      let calcSize = Math.pow(magBase, 1.4) * 0.8 + 1.0;
-
-      if (star.mag <= 1.0) calcSize += 3.0;
-
-      siz[index] = calcSize;
+      const [r, g, b] = [0.8, 0.9, 1.0];
+      col[i * 3] = r; col[i * 3 + 1] = g; col[i * 3 + 2] = b;
+      siz[i] = Math.pow(Math.max(0, 6.5 - s.mag), 1.4) * 0.8 + 1.0;
     });
-
     return { positions: pos, sizes: siz, colors: col };
   }, []);
 
-  const labeledStars = useMemo(() => {
-    return stars
-      .filter(star => star.mag < 1.5 && star.proper)
-      .map(star => {
-        const magnitudeVec = Math.sqrt(star.x * star.x + star.y * star.y + star.z * star.z);
-        const radius = 290;
-
-        const [r, g, b] = getStarColorFloats(star.ci || 0);
-        const cssColor = `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
-
-        return {
-          name: star.proper,
-          position: [
-            (star.x / magnitudeVec) * radius,
-            (star.y / magnitudeVec) * radius,
-            (star.z / magnitudeVec) * radius
-          ],
-          color: cssColor 
-        };
-      });
-  }, []);
+  const labeledStars = useMemo(() => stars.filter(s => s.mag < 1.5 && s.proper && s.proper !== "Sun").map(s => {
+    const magV = Math.sqrt(s.x ** 2 + s.y ** 2 + s.z ** 2);
+    return {
+      name: s.proper,
+      position: [(s.x / magV) * 290, (s.z / magV) * 290, (-s.y / magV) * 290], // AXIS SWAP
+      color: 'white'
+    };
+  }), []);
 
   return (
-    <div style={{ width: '100%', height: '100%' }}>
-      <Canvas camera={{ position: [0, 0, 0], fov: 60 }} style={{ width: '100vw', height: '100vh' }}>
-        <PlanetariumControls />
-        <ambientLight intensity={0.1} color='white' />
-
-        <mesh>
-          <sphereGeometry args={[300, 64, 64]} />
-          <meshBasicMaterial
-            side={THREE.BackSide}
-            transparent={true}
-            opacity={0.3}
-            color="#080b14"
-          />
-        </mesh>
-
-        <points>
-          <bufferGeometry>
-            <bufferAttribute attach="attributes-position" args={[positions, 3]} />
-            <bufferAttribute attach="attributes-aSize" args={[sizes, 1]} />
-            <bufferAttribute attach="attributes-aColor" args={[colors, 3]} />
-          </bufferGeometry>
-
-          <shaderMaterial
-            attach="material"
-            vertexShader={vertexShader}
-            fragmentShader={fragmentShader}
-            transparent={true}
-            depthWrite={false}
-            blending={THREE.AdditiveBlending}
-          />
-        </points>
-        
-        {labeledStars.map((star, i) => (
-          <Html key={i} position={star.position} center zIndexRange={[100, 0]}>
-            <div style={{
-              color: star.color,
-              marginTop: '15px',
-              fontFamily: 'sans-serif',
-              fontSize: '10px',
-              letterSpacing: '2px',
-              textTransform: 'uppercase',
-              opacity: 0.8,
-              pointerEvents: 'none',
-              userSelect: 'none'
-            }}>
-              {star.name}
-            </div>
-          </Html>
-        ))}
-
-        <Suspense fallback={null}>
-          <DeepSkyManager/>
-        </Suspense>
-
+    <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
+      <Canvas camera={{ position: [0, 0, 0], fov: 60 }}>
+        <TimeProvider>
+          <PlanetariumControls />
+          <ambientLight intensity={0.1} />
+          <mesh>
+            <sphereGeometry args={[300, 64, 64]} />
+            <meshBasicMaterial side={THREE.BackSide} transparent={true} opacity={0.3} color="#080b14" />
+          </mesh>
+          <StarSphere positions={positions} sizes={sizes} colors={colors} labeledStars={labeledStars}>
+            <Suspense fallback={null}><DeepSkyManager /></Suspense>
+            {/* The Dynamic Sun is now injected into the rotating StarSphere */}
+            <DynamicSun />
+          </StarSphere>
+        </TimeProvider>
       </Canvas>
+      <CompassOverlay />
     </div>
   );
 };
