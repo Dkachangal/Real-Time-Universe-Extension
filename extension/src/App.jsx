@@ -7,18 +7,13 @@ import './App.css';
 import { Html, useTexture, Billboard } from '@react-three/drei';
 import { io } from 'socket.io-client';
 
-// const GLOBAL_CONFIG = {
-//   LATITUDE: 28.47,  // Greater Noida
-//   LONGITUDE: 77.50, // Greater Noida
-//   GYRO: { yaw: 0, pitch: 0, roll: 0 }
-// };
 const GLOBAL_CONFIG = {
   LATITUDE: 28.47,
   LONGITUDE: 77.50,
   HEADING: 0,
   PITCH: 0,
-  ROLL: 0, // Add Roll for 3D axis tilting
-  IS_LIVE: false 
+  ROLL: 0,
+  IS_LIVE: false
 };
 
 const TimeContext = React.createContext();
@@ -32,11 +27,10 @@ const TimeProvider = ({ children }) => {
   return <TimeContext.Provider value={timeRef}>{children}</TimeContext.Provider>;
 };
 
-// --- NEW: DYNAMIC SUN COMPONENT ---
+// --- DYNAMIC SUN COMPONENT ---
 const DynamicSun = () => {
   const timeRef = useContext(TimeContext);
 
-  // Helper to calculate orbital position so we can use it in state
   const getSunPos = () => {
     const now = timeRef.current.utcTime;
     const jd = (now.getTime() / 86400000) + 2440587.5;
@@ -57,19 +51,14 @@ const DynamicSun = () => {
     const y = radius * Math.cos(epsRad) * Math.sin(lambdaRad);
     const z = radius * Math.sin(epsRad) * Math.sin(lambdaRad);
 
-    // Return the Cartesian coordinates with our X, Z, -Y swap
     return [x, z, -y];
   };
 
-  // Set the initial position into React state
   const [sunPos, setSunPos] = React.useState(getSunPos());
 
   useFrame(() => {
     const newPos = getSunPos();
 
-    // To prevent React from lagging with 60fps state updates, 
-    // we only update the state if the Sun physically moves a meaningful distance.
-    // (In a real-time simulation, it moves 1 degree per day, so it stays firmly locked)
     if (
       Math.abs(sunPos[0] - newPos[0]) > 0.1 ||
       Math.abs(sunPos[1] - newPos[1]) > 0.1 ||
@@ -80,7 +69,6 @@ const DynamicSun = () => {
   });
 
   return (
-    // Passing the state array directly into the position prop rigidly locks the HTML!
     <group position={sunPos}>
       <Billboard>
         <mesh>
@@ -137,7 +125,6 @@ const StarSphere = ({ children, positions, sizes, colors, labeledStars }) => {
     const rotationY = -((lst + 90) % 360) * (Math.PI / 180);
     starsGroupRef.current.rotation.y = rotationY;
 
-    // 3. Constantly update the Latitude tilt 
     skyDomeRef.current.rotation.x = -(90 - GLOBAL_CONFIG.LATITUDE) * (Math.PI / 180);
   });
 
@@ -164,38 +151,30 @@ const StarSphere = ({ children, positions, sizes, colors, labeledStars }) => {
   );
 };
 
-// Converts standard B-V Color Index to WebGL RGB floats
 const bvToRGB = (bv) => {
-  // If the catalog is missing the CI data, default to a standard white star
   if (bv === null || bv === undefined) return [0.9, 0.9, 1.0];
 
-  // Clamp the index to the standard astronomical range (-0.4 to 2.0)
   let t = Math.max(-0.4, Math.min(bv, 2.0));
   let r = 0, g = 0, b = 0;
 
   if (t < 0.0) {
-    // Hot Blue stars
     r = 0.61 + 0.11 * (t + 0.4) / 0.4;
     g = 0.70 + 0.07 * (t + 0.4) / 0.4;
     b = 1.0;
   } else if (t < 0.4) {
-    // Blue-White to White stars
     r = 0.83 + 0.17 * (t / 0.4);
     g = 0.87 + 0.11 * (t / 0.4);
     b = 1.0;
   } else if (t < 1.6) {
-    // Yellow to Orange stars
     r = 1.0;
     g = 0.98 - 0.16 * (t - 0.4) / 1.2;
     b = t < 1.0 ? 1.0 - 0.37 * (t - 0.4) / 0.6 : 0.63 - 0.63 * (t - 1.0) / 0.6;
   } else {
-    // Cool Red dwarfs
     r = 1.0;
     g = 0.82 - 0.5 * (t - 1.6) / 0.4;
     b = 0.0;
   }
 
-  // Ensure strict float bounds for the WebGL shader
   return [
     Math.max(0, Math.min(1, r)),
     Math.max(0, Math.min(1, g)),
@@ -256,7 +235,7 @@ const SkyRadarOverlay = () => {
     <div style={{
       position: 'absolute',
       bottom: '30px',
-      right: '135px', // Sits perfectly to the left of your 85px compass
+      right: '135px',
       width: '85px',
       height: '85px',
       borderRadius: '50%',
@@ -264,7 +243,6 @@ const SkyRadarOverlay = () => {
       backdropFilter: 'blur(10px)',
       WebkitBackdropFilter: 'blur(10px)',
       border: '1px solid rgba(255, 255, 255, 0.1)',
-      // Inner shadow gives it a 3D spherical "bowl" look
       boxShadow: 'inset 0 0 20px rgba(0,0,0,0.8), 0 8px 32px rgba(0, 0, 0, 0.5)',
       display: 'flex',
       alignItems: 'center',
@@ -274,11 +252,9 @@ const SkyRadarOverlay = () => {
       overflow: 'hidden'
     }}>
 
-      {/* Subtle Crosshairs for the Zenith (Center) */}
       <div style={{ position: 'absolute', width: '100%', height: '1px', background: 'rgba(255,255,255,0.05)' }} />
       <div style={{ position: 'absolute', width: '1px', height: '100%', background: 'rgba(255,255,255,0.05)' }} />
 
-      {/* The Dynamic Inner Ball */}
       <div id="radar-dot" style={{
         position: 'absolute',
         top: '50%',
@@ -286,11 +262,11 @@ const SkyRadarOverlay = () => {
         width: '10px',
         height: '10px',
         borderRadius: '50%',
-        background: '#38bdf8', // Premium cyan accent
+        background: '#38bdf8',
         boxShadow: '0 0 10px #38bdf8, inset 0 0 4px rgba(255,255,255,0.8)',
         transform: 'translate(-50%, -50%)',
-        transition: 'opacity 0.2s ease', // Only transition opacity, not transform!
-        willChange: 'transform' // Hardware acceleration for buttery movement
+        transition: 'opacity 0.2s ease',
+        willChange: 'transform'
       }} />
     </div>
   );
@@ -302,7 +278,7 @@ const textureMap = {
   "Helix nebula": { file: "EyeOfGod.png", color: "#22d3ee", label: "Helix Nebula" },
   "Sombrero galaxy": { file: "Sombrero.png", color: "#fef3c7", label: "Sombrero" },
   "Triangulum galaxy": { file: "Triangulum.png", color: "#fb923c", label: "Triangulum" },
-  "m31": { file: "m31.png", color: "#e5e7eb", label: "M31" } // Fixed!
+  "m31": { file: "m31.png", color: "#e5e7eb", label: "M31" }
 };
 
 const DeepSkyObject = ({ data, config }) => {
@@ -356,9 +332,8 @@ const PlanetariumControls = () => {
     const handleMove = (e) => {
       if (mouse.current.isDragging && !GLOBAL_CONFIG.IS_LIVE) {
         rot.current.yaw += e.movementX * 0.0015;
-        // The mouse clamps pitch between -90 and 90 degrees (-PI/2 to PI/2)
         rot.current.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rot.current.pitch + e.movementY * 0.0015));
-        rot.current.roll = 0; // The mouse keeps the horizon perfectly flat
+        rot.current.roll = 0;
       }
     };
     window.addEventListener('mousedown', () => mouse.current.isDragging = true);
@@ -369,20 +344,23 @@ const PlanetariumControls = () => {
 
   useFrame(() => {
     if (GLOBAL_CONFIG.IS_LIVE) {
-      // 1. EXACT MOUSE MIMIC: Update Yaw with raw, smooth data
-      rot.current.yaw = -GLOBAL_CONFIG.HEADING * (Math.PI / 180);
-      
-      // 2. Clamp Pitch identically to the mouse to prevent the camera from flipping
-      rot.current.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, GLOBAL_CONFIG.PITCH));
-      
-      // 3. Force Roll to 0 so the horizon stays flat, exactly like the mouse
-      rot.current.roll = 0; 
+
+      const targetPitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, GLOBAL_CONFIG.PITCH));
+      rot.current.pitch += (targetPitch - rot.current.pitch) * 0.08;
+
+      const targetYaw = -GLOBAL_CONFIG.HEADING * (Math.PI / 180);
+
+      let deltaYaw = targetYaw - (rot.current.yaw % (Math.PI * 2));
+
+      if (deltaYaw > Math.PI) deltaYaw -= Math.PI * 2;
+      if (deltaYaw < -Math.PI) deltaYaw += Math.PI * 2;
+
+      rot.current.yaw += deltaYaw * 0.08;
+      rot.current.roll = 0;
     }
 
-    // APPLY ROTATION TO CAMERA
     camera.quaternion.setFromEuler(new THREE.Euler(rot.current.pitch, rot.current.yaw, rot.current.roll, 'YXZ'));
 
-    // HUD SYNC
     const compassDisc = document.getElementById('compass-disc');
     if (compassDisc) {
       const yawDeg = rot.current.yaw * (180 / Math.PI);
@@ -403,27 +381,152 @@ const PlanetariumControls = () => {
   return null;
 };
 
+
+// PLANET PART
+const KEPLER_ELEMENTS = {
+  Earth:   { N: 0.0,      dN: 0.0,          i: 0.0,    di: 0.0,          w: 282.9404, dw: 4.70935E-5, a: 1.000000, e: 0.016709, de: -1.151E-9, M0: 356.0470, rateM: 0.9856002585 },
+  Mercury: { N: 48.3313,  dN: 3.24587E-5,   i: 7.0047, di: 5.00E-8,      w: 29.1241,  dw: 1.01444E-5, a: 0.387098, e: 0.205635, de: 5.59E-10,  M0: 168.6562, rateM: 4.0923344368 },
+  Venus:   { N: 76.6807,  dN: 2.46590E-5,   i: 3.3947, di: 2.75E-8,      w: 54.8910,  dw: 1.38374E-5, a: 0.723332, e: 0.006773, de: -1.302E-9, M0: 48.0201,  rateM: 1.6021302244 },
+  Mars:    { N: 49.5595,  dN: 2.11081E-5,   i: 1.8497, di: -1.78E-8,     w: 286.5016, dw: 2.92961E-5, a: 1.523679, e: 0.093401, de: 2.516E-9,  M0: 19.3871,  rateM: 0.5240207666 },
+  Jupiter: { N: 100.4645, dN: 2.76854E-5,   i: 1.3030, di: -1.557E-7,    w: 273.8668, dw: 1.64505E-5, a: 5.202603, e: 0.048498, de: 4.469E-9,  M0: 20.0202,  rateM: 0.0830852940 },
+  Saturn:  { N: 113.6655, dN: 2.38980E-5,   i: 2.4886, di: -1.081E-7,    w: 339.3939, dw: 2.97661E-5, a: 9.554909, e: 0.055546, de: -9.499E-9, M0: 317.0207, rateM: 0.0334442282 }
+};
+
+const computeHeliocentric = (elements, d) => {
+  const rad = Math.PI / 180;
+  
+  const N = elements.N + (elements.dN * d);
+  const i = elements.i + (elements.di * d);
+  const w = elements.w + (elements.dw * d);
+  const a = elements.a; 
+  const e = elements.e + (elements.de * d);
+  const M = elements.M0 + (elements.rateM * d);
+  
+  let M_rad = (M % 360) * rad;
+  if (M_rad < 0) M_rad += 2 * Math.PI; 
+  
+  let E_rad = M_rad + e * Math.sin(M_rad) * (1.0 + e * Math.cos(M_rad));
+  let delta = 1;
+  let iter = 0;
+  
+  while (Math.abs(delta) > 1e-6 && iter < 5) {
+    delta = E_rad - e * Math.sin(E_rad) - M_rad;
+    E_rad = E_rad - delta / (1 - e * Math.cos(E_rad));
+    iter++;
+  }
+  
+  const xv = a * (Math.cos(E_rad) - e);
+  const yv = a * (Math.sqrt(1.0 - e * e) * Math.sin(E_rad));
+  
+  const v = Math.atan2(yv, xv);
+  const r = Math.sqrt(xv * xv + yv * yv);
+  
+  const xh = r * (Math.cos(N * rad) * Math.cos(v + w * rad) - Math.sin(N * rad) * Math.sin(v + w * rad) * Math.cos(i * rad));
+  const yh = r * (Math.sin(N * rad) * Math.cos(v + w * rad) + Math.cos(N * rad) * Math.sin(v + w * rad) * Math.cos(i * rad));
+  const zh = r * (Math.sin(v + w * rad) * Math.sin(i * rad));
+  
+  return { x: xh, y: yh, z: zh };
+};
+
+// --- NEW: SATURN RINGS COMPONENT ---
+const SaturnRings = ({ size }) => {
+  const ringTexture = useTexture("../../public/saturnRings.png");
+  return (
+    // Rotate 90 degrees (Math.PI / 2) so they lay flat on the equator
+    <mesh rotation={[Math.PI / 2, 0, 0]}>
+      {/* Inner radius starts just outside the planet, outer radius extends wide */}
+      <ringGeometry args={[size * 1.3, size * 2.4, 64]} />
+      {/* DoubleSide is required so the rings don't disappear when viewed from underneath */}
+      <meshBasicMaterial map={ringTexture} transparent={true} side={THREE.DoubleSide} opacity={0.9} />
+    </mesh>
+  );
+};
+
+// --- DYNAMIC PLANET COMPONENT ---
+const DynamicPlanet = ({ name, textureUrl, size = 3 }) => {
+  const timeRef = useContext(TimeContext);
+  const texture = useTexture(textureUrl);
+
+  const getPlanetPos = () => {
+    const now = timeRef.current.utcTime;
+    const d = (now.getTime() / 86400000) + 2440587.5 - 2451545.0;
+
+    const earthHelio = computeHeliocentric(KEPLER_ELEMENTS.Earth, d);
+    const planetHelio = computeHeliocentric(KEPLER_ELEMENTS[name], d);
+
+    const geoX = planetHelio.x - earthHelio.x;
+    const geoY = planetHelio.y - earthHelio.y;
+    const geoZ = planetHelio.z - earthHelio.z;
+
+    const ecl = 23.439281 * (Math.PI / 180);
+    const eqX = geoX;
+    const eqY = geoY * Math.cos(ecl) - geoZ * Math.sin(ecl);
+    const eqZ = geoY * Math.sin(ecl) + geoZ * Math.cos(ecl);
+
+    const dist = Math.sqrt(eqX * eqX + eqY * eqY + eqZ * eqZ);
+    const finalX = (eqX / dist) * 290;
+    const finalY = (eqY / dist) * 290;
+    const finalZ = (eqZ / dist) * 290;
+
+    return [finalX, finalZ, -finalY];
+  };
+
+  const [pos, setPos] = React.useState(getPlanetPos());
+
+  useFrame(() => {
+    const newPos = getPlanetPos();
+    if (
+      Math.abs(pos[0] - newPos[0]) > 0.1 ||
+      Math.abs(pos[1] - newPos[1]) > 0.1 ||
+      Math.abs(pos[2] - newPos[2]) > 0.1
+    ) {
+      setPos(newPos);
+    }
+  });
+
+  return (
+    <group position={pos}>
+      {/* Add a slight tilt to Saturn so the ring surface is visible, otherwise keep it at 0 */}
+      <group rotation={[name === 'Saturn' ? 0.4 : 0, 0, 0]}>
+        <mesh>
+          <sphereGeometry args={[size, 32, 32]} />
+          <meshBasicMaterial map={texture} />
+        </mesh>
+        
+        {/* Conditionally render the rings only if this specific planet is Saturn */}
+        {name === 'Saturn' && <SaturnRings size={size} />}
+      </group>
+      
+      <Html center zIndexRange={[100, 0]}>
+        <div style={{ color: '#ffffff', marginTop: '55px', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', pointerEvents: 'none' }}>
+          {name}
+        </div>
+      </Html>
+    </group>
+  );
+};
+
 const App = () => {
-useEffect(() => {
+  useEffect(() => {
     const socket = io('http://10.133.69.114:3000');
 
     socket.on('mobile_data_stream', (data) => {
       GLOBAL_CONFIG.LATITUDE = data.latitude;
       GLOBAL_CONFIG.LONGITUDE = data.longitude;
-      GLOBAL_CONFIG.HEADING = data.heading; // Absolute Yaw (Compass)
-      GLOBAL_CONFIG.PITCH = data.pitch;     // Front/Back Tilt (Beta)
-      GLOBAL_CONFIG.ROLL = data.yaw;        // Side/Side Tilt (Gamma)
-      GLOBAL_CONFIG.IS_LIVE = true; 
+      GLOBAL_CONFIG.HEADING = data.heading;
+      GLOBAL_CONFIG.PITCH = data.pitch;
+      GLOBAL_CONFIG.ROLL = data.yaw;
+      GLOBAL_CONFIG.IS_LIVE = true;
     });
 
     socket.on('disconnect', () => {
-      GLOBAL_CONFIG.IS_LIVE = false; 
+      GLOBAL_CONFIG.IS_LIVE = false;
     });
 
     return () => socket.disconnect();
   }, []);
   const { positions, sizes, colors } = useMemo(() => {
-    // Determine how many actual stars we have after filtering the Sun
+
     const realStars = stars.filter(s => s.proper !== "Sun");
 
     const pos = new Float32Array(realStars.length * 3);
@@ -433,7 +536,7 @@ useEffect(() => {
     realStars.forEach((s, i) => {
       const magV = Math.sqrt(s.x ** 2 + s.y ** 2 + s.z ** 2);
 
-      // AXIS SWAP: Z becomes Y, Y becomes -Z
+
       pos[i * 3] = (s.x / magV) * 290;
       pos[i * 3 + 1] = (s.z / magV) * 290;
       pos[i * 3 + 2] = (-s.y / magV) * 290;
@@ -453,7 +556,7 @@ useEffect(() => {
     const cssColor = `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
     return {
       name: s.proper,
-      position: [(s.x / magV) * 290, (s.z / magV) * 290, (-s.y / magV) * 290], // AXIS SWAP
+      position: [(s.x / magV) * 290, (s.z / magV) * 290, (-s.y / magV) * 290],
       color: cssColor
     };
   }), []);
@@ -470,8 +573,14 @@ useEffect(() => {
           </mesh>
           <StarSphere positions={positions} sizes={sizes} colors={colors} labeledStars={labeledStars}>
             <Suspense fallback={null}><DeepSkyManager /></Suspense>
-            {/* The Dynamic Sun is now injected into the rotating StarSphere */}
+
             <DynamicSun />
+            <Suspense fallback={null}>
+              <DynamicPlanet name="Venus" textureUrl="../../public/venus.jpg" size={4.5} />
+              <DynamicPlanet name="Mars" textureUrl="../../public/mars.jpg" size={3.5} />
+              <DynamicPlanet name="Jupiter" textureUrl="../../public/jupiter.jpg" size={7} />
+              <DynamicPlanet name="Saturn" textureUrl="../../public/saturn.jpg" size={6} />
+            </Suspense>
           </StarSphere>
         </TimeProvider>
       </Canvas>
