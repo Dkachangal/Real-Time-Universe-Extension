@@ -5,11 +5,20 @@ import stars from '../../data-pipeline/starsHYG3.json';
 import nonStars from '../../data-pipeline/non-stars.json';
 import './App.css';
 import { Html, useTexture, Billboard } from '@react-three/drei';
+import { io } from 'socket.io-client';
 
+// const GLOBAL_CONFIG = {
+//   LATITUDE: 28.47,  // Greater Noida
+//   LONGITUDE: 77.50, // Greater Noida
+//   GYRO: { yaw: 0, pitch: 0, roll: 0 }
+// };
 const GLOBAL_CONFIG = {
-  LATITUDE: 28.47,  // Greater Noida
-  LONGITUDE: 77.50, // Greater Noida
-  GYRO: { yaw: 0, pitch: 0, roll: 0 }
+  LATITUDE: 28.47,
+  LONGITUDE: 77.50,
+  HEADING: 0,
+  PITCH: 0,
+  ROLL: 0, // Add Roll for 3D axis tilting
+  IS_LIVE: false 
 };
 
 const TimeContext = React.createContext();
@@ -31,7 +40,7 @@ const DynamicSun = () => {
   const getSunPos = () => {
     const now = timeRef.current.utcTime;
     const jd = (now.getTime() / 86400000) + 2440587.5;
-    const d = jd - 2451545.0; 
+    const d = jd - 2451545.0;
 
     const L = (280.460 + 0.9856474 * d) % 360;
     const g = (357.528 + 0.9856003 * d) % 360;
@@ -57,7 +66,7 @@ const DynamicSun = () => {
 
   useFrame(() => {
     const newPos = getSunPos();
-    
+
     // To prevent React from lagging with 60fps state updates, 
     // we only update the state if the Sun physically moves a meaningful distance.
     // (In a real-time simulation, it moves 1 degree per day, so it stays firmly locked)
@@ -113,6 +122,7 @@ const DynamicSun = () => {
 
 const StarSphere = ({ children, positions, sizes, colors, labeledStars }) => {
   const starsGroupRef = useRef();
+  const skyDomeRef = useRef();
   const timeRef = useContext(TimeContext);
 
   useFrame(() => {
@@ -122,15 +132,17 @@ const StarSphere = ({ children, positions, sizes, colors, labeledStars }) => {
     const jd = (now.getTime() / 86400000) + 2440587.5;
     const d = jd - 2451545.0;
     const gmst = 280.46061837 + 360.98564736629 * d;
-    const lst = gmst + GLOBAL_CONFIG.LONGITUDE;
 
-    // THE FIX: Added + 90 to align Three.js East with Astronomy South
+    const lst = gmst + GLOBAL_CONFIG.LONGITUDE;
     const rotationY = -((lst + 90) % 360) * (Math.PI / 180);
     starsGroupRef.current.rotation.y = rotationY;
+
+    // 3. Constantly update the Latitude tilt 
+    skyDomeRef.current.rotation.x = -(90 - GLOBAL_CONFIG.LATITUDE) * (Math.PI / 180);
   });
 
   return (
-    <group rotation={[-(90 - GLOBAL_CONFIG.LATITUDE) * (Math.PI / 180), 0, 0]}>
+    <group ref={skyDomeRef}>
       <group ref={starsGroupRef}>
         <points>
           <bufferGeometry>
@@ -261,7 +273,7 @@ const SkyRadarOverlay = () => {
       zIndex: 1000,
       overflow: 'hidden'
     }}>
-      
+
       {/* Subtle Crosshairs for the Zenith (Center) */}
       <div style={{ position: 'absolute', width: '100%', height: '1px', background: 'rgba(255,255,255,0.05)' }} />
       <div style={{ position: 'absolute', width: '1px', height: '100%', background: 'rgba(255,255,255,0.05)' }} />
@@ -338,13 +350,15 @@ const fragmentShader = `varying vec3 vColor; void main() { vec2 coord = gl_Point
 const PlanetariumControls = () => {
   const { camera } = useThree();
   const mouse = useRef({ isDragging: false });
-  const rot = useRef({ yaw: 0, pitch: 0 });
+  const rot = useRef({ yaw: 0, pitch: 0, roll: 0 });
 
   useEffect(() => {
     const handleMove = (e) => {
-      if (mouse.current.isDragging) {
+      if (mouse.current.isDragging && !GLOBAL_CONFIG.IS_LIVE) {
         rot.current.yaw += e.movementX * 0.0015;
+        // The mouse clamps pitch between -90 and 90 degrees (-PI/2 to PI/2)
         rot.current.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rot.current.pitch + e.movementY * 0.0015));
+        rot.current.roll = 0; // The mouse keeps the horizon perfectly flat
       }
     };
     window.addEventListener('mousedown', () => mouse.current.isDragging = true);
@@ -354,32 +368,34 @@ const PlanetariumControls = () => {
   }, []);
 
   useFrame(() => {
-    // 1. Update Camera
-    camera.quaternion.setFromEuler(new THREE.Euler(rot.current.pitch, rot.current.yaw, 0, 'YXZ'));
-    
-    // 2. Sync Compass
+    if (GLOBAL_CONFIG.IS_LIVE) {
+      // 1. EXACT MOUSE MIMIC: Update Yaw with raw, smooth data
+      rot.current.yaw = -GLOBAL_CONFIG.HEADING * (Math.PI / 180);
+      
+      // 2. Clamp Pitch identically to the mouse to prevent the camera from flipping
+      rot.current.pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, GLOBAL_CONFIG.PITCH));
+      
+      // 3. Force Roll to 0 so the horizon stays flat, exactly like the mouse
+      rot.current.roll = 0; 
+    }
+
+    // APPLY ROTATION TO CAMERA
+    camera.quaternion.setFromEuler(new THREE.Euler(rot.current.pitch, rot.current.yaw, rot.current.roll, 'YXZ'));
+
+    // HUD SYNC
     const compassDisc = document.getElementById('compass-disc');
     if (compassDisc) {
       const yawDeg = rot.current.yaw * (180 / Math.PI);
       compassDisc.style.transform = `rotate(${yawDeg}deg)`;
     }
 
-    // 3. Sync Sky Radar (Trackball)
     const radarDot = document.getElementById('radar-dot');
     if (radarDot) {
-      // Max pixel distance the inner ball can travel from the center
-      const maxRadius = 35; 
-      
-      // Map Pitch to distance from center (cos(90deg) = 0 center, cos(0deg) = 1 edge)
+      const maxRadius = 35;
       const distance = Math.cos(rot.current.pitch) * maxRadius;
-      
-      // Project Yaw to X/Y coordinates
       const dotX = Math.sin(-rot.current.yaw) * distance;
       const dotY = -Math.cos(-rot.current.yaw) * distance;
-      
       radarDot.style.transform = `translate(calc(-50% + ${dotX}px), calc(-50% + ${dotY}px))`;
-      
-      // Optional premium touch: Dim the glowing ball slightly if looking below the horizon
       radarDot.style.opacity = rot.current.pitch < 0 ? 0.3 : 1.0;
     }
   });
@@ -388,6 +404,24 @@ const PlanetariumControls = () => {
 };
 
 const App = () => {
+useEffect(() => {
+    const socket = io('http://10.133.69.114:3000');
+
+    socket.on('mobile_data_stream', (data) => {
+      GLOBAL_CONFIG.LATITUDE = data.latitude;
+      GLOBAL_CONFIG.LONGITUDE = data.longitude;
+      GLOBAL_CONFIG.HEADING = data.heading; // Absolute Yaw (Compass)
+      GLOBAL_CONFIG.PITCH = data.pitch;     // Front/Back Tilt (Beta)
+      GLOBAL_CONFIG.ROLL = data.yaw;        // Side/Side Tilt (Gamma)
+      GLOBAL_CONFIG.IS_LIVE = true; 
+    });
+
+    socket.on('disconnect', () => {
+      GLOBAL_CONFIG.IS_LIVE = false; 
+    });
+
+    return () => socket.disconnect();
+  }, []);
   const { positions, sizes, colors } = useMemo(() => {
     // Determine how many actual stars we have after filtering the Sun
     const realStars = stars.filter(s => s.proper !== "Sun");
