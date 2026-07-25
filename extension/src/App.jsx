@@ -27,21 +27,23 @@ const TimeProvider = ({ children }) => {
   return <TimeContext.Provider value={timeRef}>{children}</TimeContext.Provider>;
 };
 
-// --- DYNAMIC SUN COMPONENT ---
+// --- DYNAMIC SUN ...AB HATH MAT LAGA DENA 😭 ---
 const DynamicSun = () => {
   const timeRef = useContext(TimeContext);
 
   const getSunPos = () => {
     const now = timeRef.current.utcTime;
-    const jd = (now.getTime() / 86400000) + 2440587.5;
-    const d = jd - 2451545.0;
+    const jd = (now.getTime() / 86400000) + 2440587.5;   // this is used by sciencetists since jan 1 4713BC called Julian Date
+    const d = jd - 2451545.0;   // now i have todays julian date in milliseconds
 
-    const L = (280.460 + 0.9856474 * d) % 360;
+    const L = (280.460 + 0.9856474 * d) % 360;    // this is the mean longitude, assumed a circular orbit , here
+    // the 280.shit is the suns posiiton in epoch (where the sun was starting), and the 0.9... shi is the 
+    // amount of degree sun appears to be moved (the revolution shit).
     const g = (357.528 + 0.9856003 * d) % 360;
     const gRad = g * (Math.PI / 180);
 
-    const lambda = L + 1.915 * Math.sin(gRad) + 0.020 * Math.sin(2 * gRad);
-    const lambdaRad = lambda * (Math.PI / 180);
+    const lambda = L + 1.915 * Math.sin(gRad) + 0.020 * Math.sin(2 * gRad);  // as the orbit is ellipse and not circle
+    const lambdaRad = lambda * (Math.PI / 180);    // as we need the sun's position along the ellyptical plane
 
     const epsilon = 23.439 - 0.0000004 * d;
     const epsRad = epsilon * (Math.PI / 180);
@@ -53,13 +55,14 @@ const DynamicSun = () => {
 
     return [x, z, -y];
   };
-
+// why import when i am using it rarely duhh...gotta make the app light this time💀
   const [sunPos, setSunPos] = React.useState(getSunPos());
 
   useFrame(() => {
     const newPos = getSunPos();
 
     if (
+      // so i don't wanna render the sun everytime, so it will move only when there is a difference of strictly more than 0.1 deg in any of the dimenssions
       Math.abs(sunPos[0] - newPos[0]) > 0.1 ||
       Math.abs(sunPos[1] - newPos[1]) > 0.1 ||
       Math.abs(sunPos[2] - newPos[2]) > 0.1
@@ -67,7 +70,9 @@ const DynamicSun = () => {
       setSunPos(newPos);
     }
   });
-
+// the sun is 2D, so using BILLBOARD so that it constantly faces the camera
+// so this modelViewMatrix is used to calculate the position, rotatin, scale in virtual page(3D) and combine it with camera's position to determine which exact shit to glow in the
+// 
   return (
     <group position={sunPos}>
       <Billboard>
@@ -381,8 +386,14 @@ const PlanetariumControls = () => {
   return null;
 };
 
-
-// PLANET PART
+// PLANET SHIT 
+// a - avg dis from planet to sun, 1Au is dis from earth to sun
+// e - ecentricity - 0 - circle and makes oval with increase
+// i - tilt of orbit
+// N - where it crosses earths orbit from south to north
+// w - angle 
+// M0 - starting pos of planet in it's orbit
+// rateM - avg speed of planet
 const KEPLER_ELEMENTS = {
   Earth:   { N: 0.0,      dN: 0.0,          i: 0.0,    di: 0.0,          w: 282.9404, dw: 4.70935E-5, a: 1.000000, e: 0.016709, de: -1.151E-9, M0: 356.0470, rateM: 0.9856002585 },
   Mercury: { N: 48.3313,  dN: 3.24587E-5,   i: 7.0047, di: 5.00E-8,      w: 29.1241,  dw: 1.01444E-5, a: 0.387098, e: 0.205635, de: 5.59E-10,  M0: 168.6562, rateM: 4.0923344368 },
@@ -394,33 +405,34 @@ const KEPLER_ELEMENTS = {
 
 const computeHeliocentric = (elements, d) => {
   const rad = Math.PI / 180;
-  
   const N = elements.N + (elements.dN * d);
   const i = elements.i + (elements.di * d);
   const w = elements.w + (elements.dw * d);
   const a = elements.a; 
   const e = elements.e + (elements.de * d);
   const M = elements.M0 + (elements.rateM * d);
-  
   let M_rad = (M % 360) * rad;
+
   if (M_rad < 0) M_rad += 2 * Math.PI; 
-  
+
   let E_rad = M_rad + e * Math.sin(M_rad) * (1.0 + e * Math.cos(M_rad));
   let delta = 1;
-  let iter = 0;
+  let tmp = 0;
   
-  while (Math.abs(delta) > 1e-6 && iter < 5) {
+  while (Math.abs(delta) > 1e-6 && tmp < 5) {
     delta = E_rad - e * Math.sin(E_rad) - M_rad;
     E_rad = E_rad - delta / (1 - e * Math.cos(E_rad));
-    iter++;
+    tmp++;
   }
   
   const xv = a * (Math.cos(E_rad) - e);
   const yv = a * (Math.sqrt(1.0 - e * e) * Math.sin(E_rad));
   
+  // MUJHE MAT HATANA RE...x y coordinate ko "ANGLE" me badalta hu re
   const v = Math.atan2(yv, xv);
   const r = Math.sqrt(xv * xv + yv * yv);
   
+  // juts converting one shit into another . ITS WORKKING>>>>>>>>>
   const xh = r * (Math.cos(N * rad) * Math.cos(v + w * rad) - Math.sin(N * rad) * Math.sin(v + w * rad) * Math.cos(i * rad));
   const yh = r * (Math.sin(N * rad) * Math.cos(v + w * rad) + Math.cos(N * rad) * Math.sin(v + w * rad) * Math.cos(i * rad));
   const zh = r * (Math.sin(v + w * rad) * Math.sin(i * rad));
@@ -428,21 +440,21 @@ const computeHeliocentric = (elements, d) => {
   return { x: xh, y: yh, z: zh };
 };
 
-// --- NEW: SATURN RINGS COMPONENT ---
+//  SATURN RINGS AKA PYAAZ 😭
 const SaturnRings = ({ size }) => {
-  const ringTexture = useTexture("../../public/saturnRings.png");
+  const ringTexture = useTexture("/saturnRings.png");
   return (
-    // Rotate 90 degrees (Math.PI / 2) so they lay flat on the equator
+    // Rotate 90 DEG
     <mesh rotation={[Math.PI / 2, 0, 0]}>
-      {/* Inner radius starts just outside the planet, outer radius extends wide */}
+      {/* inner radius is planets equator, and outside  is also outer */}
       <ringGeometry args={[size * 1.3, size * 2.4, 64]} />
-      {/* DoubleSide is required so the rings don't disappear when viewed from underneath */}
+      {/* if saturn is on top, rings must be seen, this is not unity ... */}
       <meshBasicMaterial map={ringTexture} transparent={true} side={THREE.DoubleSide} opacity={0.9} />
     </mesh>
   );
 };
 
-// --- DYNAMIC PLANET COMPONENT ---
+//  MOVING PLANETS (DYNAMIC PLANET FUNCTINO)
 const DynamicPlanet = ({ name, textureUrl, size = 3 }) => {
   const timeRef = useContext(TimeContext);
   const texture = useTexture(textureUrl);
@@ -454,15 +466,18 @@ const DynamicPlanet = ({ name, textureUrl, size = 3 }) => {
     const earthHelio = computeHeliocentric(KEPLER_ELEMENTS.Earth, d);
     const planetHelio = computeHeliocentric(KEPLER_ELEMENTS[name], d);
 
+    // getting har ek planet ki location.
     const geoX = planetHelio.x - earthHelio.x;
     const geoY = planetHelio.y - earthHelio.y;
     const geoZ = planetHelio.z - earthHelio.z;
 
+    // tilting the planets as per earth's axis.
     const ecl = 23.439281 * (Math.PI / 180);
     const eqX = geoX;
     const eqY = geoY * Math.cos(ecl) - geoZ * Math.sin(ecl);
     const eqZ = geoY * Math.sin(ecl) + geoZ * Math.cos(ecl);
 
+    // ṣtick the small balls on the larger one 💀
     const dist = Math.sqrt(eqX * eqX + eqY * eqY + eqZ * eqZ);
     const finalX = (eqX / dist) * 290;
     const finalY = (eqY / dist) * 290;
@@ -505,7 +520,58 @@ const DynamicPlanet = ({ name, textureUrl, size = 3 }) => {
     </group>
   );
 };
+const GlassSearchBar = () => {
+  // juts using bgdropFilter blur...easy
+  return (
+    <div style={{
+      position: 'absolute',
+      bottom: '18%',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      width: '40%',
+      minWidth: '400px',
+      maxWidth: '600px',
+      zIndex: 1000,
+    }}>
+      <form action="https://www.google.com/search" method="GET" style={{
+        display: 'flex',
+        alignItems: 'center',
+        background: 'rgba(15, 15, 20, 0.45)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        borderRadius: '24px',
+        padding: '16px 24px',
+        boxShadow: '0 16px 40px rgba(0,0,0,0.5)',
+      }}>
+        {/* making the search icon --- just a circle and a tilted line. */}
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#65628c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
 
+        <input
+          type="text" 
+          name="q" 
+          placeholder="Search the web..." 
+          autoComplete="off"
+          autoFocus
+          style={{
+            flex: 1,
+            background: 'transparent',
+            border: 'none',
+            outline: 'none',
+            color: '#ffffff',
+            fontSize: '17px',
+            marginLeft: '16px',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+            letterSpacing: '0.5px'
+          }} 
+        />
+      </form>
+    </div>
+  );
+};
 const App = () => {
   useEffect(() => {
     const socket = io('http://10.133.69.114:3000');
@@ -576,16 +642,17 @@ const App = () => {
 
             <DynamicSun />
             <Suspense fallback={null}>
-              <DynamicPlanet name="Venus" textureUrl="../../public/venus.jpg" size={4.5} />
-              <DynamicPlanet name="Mars" textureUrl="../../public/mars.jpg" size={3.5} />
-              <DynamicPlanet name="Jupiter" textureUrl="../../public/jupiter.jpg" size={7} />
-              <DynamicPlanet name="Saturn" textureUrl="../../public/saturn.jpg" size={6} />
+              <DynamicPlanet name="Venus" textureUrl="/`venus.jpg" size={4.5} />
+              <DynamicPlanet name="Mars" textureUrl="/mars.jpg" size={3.5} />
+              <DynamicPlanet name="Jupiter" textureUrl="/jupiter.jpg" size={7} />
+              <DynamicPlanet name="Saturn" textureUrl="/saturn.jpg" size={6} />
             </Suspense>
           </StarSphere>
         </TimeProvider>
       </Canvas>
       <CompassOverlay />
       <SkyRadarOverlay />
+      <GlassSearchBar />
     </div>
   );
 };

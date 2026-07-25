@@ -6,23 +6,21 @@ import * as TaskManager from 'expo-task-manager'
 import { DeviceMotion } from 'expo-sensors'
 import { io } from 'socket.io-client'
 
-// --- 🌐 SOCKET.IO CLIENT SETUP ---
-// NOTE: If using campus Wi-Fi, change this to your Mobile Hotspot IPv4 address
+// SOCKET.IO CLIENT SETUP 
 const SERVER_URL = 'http://10.133.69.114:3000'; 
 const socket = io(SERVER_URL, {
   autoConnect: true,
 });
 
-// --- 🚨 DIAGNOSTIC LOGS ---
 socket.on('connect', () => {
-  console.log('✅ MOBILE SOCKET CONNECTED TO SERVER!');
+  console.log(' MOBILE SOCKET CONNECTED');
 });
 
 socket.on('connect_error', (error) => {
-  console.log('❌ MOBILE SOCKET CONNECTION FAILED:', error.message);
+  console.log('MOBILE socket could not connect -> error', error.message);
 });
 
-// GLOBAL TASK MANAGER
+
 TaskManager.defineTask('fetchLocationBG', ({ data, error }) => {
   if (error) {
     console.log("Error in background worker:", error);
@@ -39,7 +37,7 @@ const getCompassDirection = (degrees) => {
   return directions[index];
 };
 
-const Index = () => { // CRASH FIX: Capitalized 'Index'
+const Index = () => { 
   const [status, requestPermission] = Location.useForegroundPermissions();
   const [bgStatus, requestBgPermission] = Location.useBackgroundPermissions();
 
@@ -48,7 +46,6 @@ const Index = () => { // CRASH FIX: Capitalized 'Index'
   const [fgSubscription, setFgSubscription] = useState(null);
   const [compassSubscription, setCompassSubscription] = useState(null);
 
-  // --- 📦 UNIFIED MASTER DATA OBJECT ---
   const telemetryRef = useRef({
     latitude: 0,
     longitude: 0,
@@ -74,7 +71,6 @@ const Index = () => { // CRASH FIX: Capitalized 'Index'
   const animatedGyroX = useRef(new Animated.Value(0)).current;
   const animatedGyroY = useRef(new Animated.Value(0)).current;
   
-  // STABILITY FIX: Added tracking refs for the low-pass filter
   const continuousHeading = useRef(0);
   const lastHeading = useRef(null);
 
@@ -84,6 +80,7 @@ const Index = () => { // CRASH FIX: Capitalized 'Index'
     };
   }, []);
 
+  // basically if yes, then no, and otherwise...its working 😭✌️
   const handleLocationToggle = async () => {
     if (!status?.granted) {
       await requestPermission();
@@ -110,7 +107,6 @@ const Index = () => { // CRASH FIX: Capitalized 'Index'
 
       setIsTracking(false);
       
-      // STABILITY FIX: Reset the filter variables on disconnect
       continuousHeading.current = 0;
       lastHeading.current = null;
       
@@ -139,27 +135,28 @@ const Index = () => { // CRASH FIX: Capitalized 'Index'
     const activeCompassWatcher = await Location.watchHeadingAsync((headingData) => {
       const rawHeading = headingData.trueHeading >= 0 ? headingData.trueHeading : headingData.magneticHeading;
       
-      // STABILITY FIX: 1. Low-Pass Filter
       if (lastHeading.current === null) {
         lastHeading.current = rawHeading;
       } else {
         let filterDelta = rawHeading - lastHeading.current;
         if (filterDelta > 180) filterDelta -= 360;
         if (filterDelta < -180) filterDelta += 360;
-        // 0.15 is the magic smoothing number. It kills the tremble.
+        // 0.15 keep this number AS IT IS. varna fielding set compass ki
         lastHeading.current = (lastHeading.current + (filterDelta * 0.15) + 360) % 360; 
       }
       
       const currentHeading = lastHeading.current;
       
-      // STABILITY FIX: 2. Continuous Math (prevents 360-degree snapback)
+      // prevents it from zada ulta sidha ghumna, cause when the compass goes from 
+      // 359 to 1 deg, normally it goes back around 358 degrees, but now
+      // i rotate it opposite
       let delta = currentHeading - (continuousHeading.current % 360);
       if (delta > 180) delta -= 360;
       if (delta < -180) delta += 360;
       
       continuousHeading.current += delta;
       
-      // STABILITY FIX: 3. Fluid Spring Animation
+      // stability me sudhaar 🦒
       Animated.spring(animatedHeading, { 
         toValue: continuousHeading.current, 
         friction: 6,
@@ -264,7 +261,9 @@ const Index = () => { // CRASH FIX: Capitalized 'Index'
   )
 }
 
-export default Index // CRASH FIX: Export updated to match Capitalized name
+export default Index 
+
+// STYLESHEET FINAL AI IMPROVEMENTS TO ENHANCE LOOK...can improve baad me when to add more features
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0915', paddingHorizontal: 20 },
