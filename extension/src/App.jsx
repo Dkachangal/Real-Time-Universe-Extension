@@ -55,7 +55,7 @@ const DynamicSun = () => {
 
     return [x, z, -y];
   };
-// why import when i am using it rarely duhh...gotta make the app light this time💀
+  // why import when i am using it rarely duhh...gotta make the app light this time💀
   const [sunPos, setSunPos] = React.useState(getSunPos());
 
   useFrame(() => {
@@ -70,9 +70,9 @@ const DynamicSun = () => {
       setSunPos(newPos);
     }
   });
-// the sun is 2D, so using BILLBOARD so that it constantly faces the camera
-// so this modelViewMatrix is used to calculate the position, rotatin, scale in virtual page(3D) and combine it with camera's position to determine which exact shit to glow in the
-// 
+  // the sun is 2D, so using BILLBOARD so that it constantly faces the camera
+  // so this modelViewMatrix is used to calculate the position, rotatin, scale in virtual page(3D) and combine it with camera's position to determine which exact shit to glow in the
+  // 
   return (
     <group position={sunPos}>
       <Billboard>
@@ -395,13 +395,13 @@ const PlanetariumControls = () => {
 // M0 - starting pos of planet in it's orbit
 // rateM - avg speed of planet
 const KEPLER_ELEMENTS = {
-  Earth:   { N: 0.0,      dN: 0.0,          i: 0.0,    di: 0.0,          w: 282.9404, dw: 4.70935E-5, a: 1.000000, e: 0.016709, de: -1.151E-9, M0: 356.0470, rateM: 0.9856002585 },
-  Mercury: { N: 48.3313,  dN: 3.24587E-5,   i: 7.0047, di: 5.00E-8,      w: 29.1241,  dw: 1.01444E-5, a: 0.387098, e: 0.205635, de: 5.59E-10,  M0: 168.6562, rateM: 4.0923344368 },
-  Venus:   { N: 76.6807,  dN: 2.46590E-5,   i: 3.3947, di: 2.75E-8,      w: 54.8910,  dw: 1.38374E-5, a: 0.723332, e: 0.006773, de: -1.302E-9, M0: 48.0201,  rateM: 1.6021302244 },
-  Mars:    { N: 49.5595,  dN: 2.11081E-5,   i: 1.8497, di: -1.78E-8,     w: 286.5016, dw: 2.92961E-5, a: 1.523679, e: 0.093401, de: 2.516E-9,  M0: 19.3871,  rateM: 0.5240207666 },
-  Jupiter: { N: 100.4645, dN: 2.76854E-5,   i: 1.3030, di: -1.557E-7,    w: 273.8668, dw: 1.64505E-5, a: 5.202603, e: 0.048498, de: 4.469E-9,  M0: 20.0202,  rateM: 0.0830852940 },
-  Saturn:  { N: 113.6655, dN: 2.38980E-5,   i: 2.4886, di: -1.081E-7,    w: 339.3939, dw: 2.97661E-5, a: 9.554909, e: 0.055546, de: -9.499E-9, M0: 317.0207, rateM: 0.0334442282 },
-  Moon:    { N: 125.0433, dN: -0.0529539,   i: 5.1500, di: 0.0,          w: 318.3098, dw: 0.164358,   a: 0.002570, e: 0.054900, de: 0.0,       M0: 134.9629, rateM: 13.06499245 }
+  Earth: { N: 0.0, dN: 0.0, i: 0.0, di: 0.0, w: 282.9404, dw: 4.70935E-5, a: 1.000000, e: 0.016709, de: -1.151E-9, M0: 356.0470, rateM: 0.9856002585 },
+  Mercury: { N: 48.3313, dN: 3.24587E-5, i: 7.0047, di: 5.00E-8, w: 29.1241, dw: 1.01444E-5, a: 0.387098, e: 0.205635, de: 5.59E-10, M0: 168.6562, rateM: 4.0923344368 },
+  Venus: { N: 76.6807, dN: 2.46590E-5, i: 3.3947, di: 2.75E-8, w: 54.8910, dw: 1.38374E-5, a: 0.723332, e: 0.006773, de: -1.302E-9, M0: 48.0201, rateM: 1.6021302244 },
+  Mars: { N: 49.5595, dN: 2.11081E-5, i: 1.8497, di: -1.78E-8, w: 286.5016, dw: 2.92961E-5, a: 1.523679, e: 0.093401, de: 2.516E-9, M0: 19.3871, rateM: 0.5240207666 },
+  Jupiter: { N: 100.4645, dN: 2.76854E-5, i: 1.3030, di: -1.557E-7, w: 273.8668, dw: 1.64505E-5, a: 5.202603, e: 0.048498, de: 4.469E-9, M0: 20.0202, rateM: 0.0830852940 },
+  Saturn: { N: 113.6655, dN: 2.38980E-5, i: 2.4886, di: -1.081E-7, w: 339.3939, dw: 2.97661E-5, a: 9.554909, e: 0.055546, de: -9.499E-9, M0: 317.0207, rateM: 0.0334442282 },
+  Moon: { N: 125.0433, dN: -0.0529539, i: 5.1500, di: 0.0, w: 318.3098, dw: 0.164358, a: 0.002570, e: 0.054900, de: 0.0, M0: 134.9629, rateM: 13.06499245 }
 };
 
 const computeHeliocentric = (elements, d) => {
@@ -409,35 +409,35 @@ const computeHeliocentric = (elements, d) => {
   const N = elements.N + (elements.dN * d);
   const i = elements.i + (elements.di * d);
   const w = elements.w + (elements.dw * d);
-  const a = elements.a; 
+  const a = elements.a;
   const e = elements.e + (elements.de * d);
   const M = elements.M0 + (elements.rateM * d);
   let M_rad = (M % 360) * rad;
 
-  if (M_rad < 0) M_rad += 2 * Math.PI; 
+  if (M_rad < 0) M_rad += 2 * Math.PI;
 
   let E_rad = M_rad + e * Math.sin(M_rad) * (1.0 + e * Math.cos(M_rad));
   let delta = 1;
   let tmp = 0;
-  
+
   while (Math.abs(delta) > 1e-6 && tmp < 5) {
     delta = E_rad - e * Math.sin(E_rad) - M_rad;
     E_rad = E_rad - delta / (1 - e * Math.cos(E_rad));
     tmp++;
   }
-  
+
   const xv = a * (Math.cos(E_rad) - e);
   const yv = a * (Math.sqrt(1.0 - e * e) * Math.sin(E_rad));
-  
+
   // MUJHE MAT HATANA RE...x y coordinate ko "ANGLE" me badalta hu re
   const v = Math.atan2(yv, xv);
   const r = Math.sqrt(xv * xv + yv * yv);
-  
+
   // juts converting one shit into another . ITS WORKKING>>>>>>>>>
   const xh = r * (Math.cos(N * rad) * Math.cos(v + w * rad) - Math.sin(N * rad) * Math.sin(v + w * rad) * Math.cos(i * rad));
   const yh = r * (Math.sin(N * rad) * Math.cos(v + w * rad) + Math.cos(N * rad) * Math.sin(v + w * rad) * Math.cos(i * rad));
   const zh = r * (Math.sin(v + w * rad) * Math.sin(i * rad));
-  
+
   return { x: xh, y: yh, z: zh };
 };
 
@@ -456,6 +456,8 @@ const SaturnRings = ({ size }) => {
 };
 
 //  MOVING PLANETS (DYNAMIC PLANET FUNCTINO)
+// THIS IS THE MATH USED FOR PLANETS, AS CENTERED AROUND SUN.
+// so moon will not fit in here
 const DynamicPlanet = ({ name, textureUrl, size = 3 }) => {
   const timeRef = useContext(TimeContext);
   const texture = useTexture(textureUrl);
@@ -463,10 +465,33 @@ const DynamicPlanet = ({ name, textureUrl, size = 3 }) => {
   const getPlanetPos = () => {
     const now = timeRef.current.utcTime;
     const d = (now.getTime() / 86400000) + 2440587.5 - 2451545.0;
-
+    // this will give 3D coordinates of planet around the SUN!
     const earthHelio = computeHeliocentric(KEPLER_ELEMENTS.Earth, d);
     const planetHelio = computeHeliocentric(KEPLER_ELEMENTS[name], d);
 
+    if ( name  === "Moon") {
+      // calculating the pos of moon wrt earth
+      // = dis of earth from sun - dis of moon from sun
+      const moonX = planetHelio.x;
+      const moonY = planetHelio.y;
+      const moonZ = planetHelio.z;
+
+      // slant it as well
+      const ecl = 23.439281 * (Math.PI / 180);
+      const eqX = moonX;
+      const eqY = moonY * Math.cos(ecl) - moonZ * Math.sin(ecl);
+      const eqZ = moonY * Math.sin(ecl) + moonZ * Math.cos(ecl);
+
+      // ṣtick the moon on the sphere as well
+
+      const dist = Math.sqrt(eqX * eqX + eqY * eqY + eqZ * eqZ);
+      const finalX = (eqX / dist) * 290;
+      const finalY = (eqY / dist) * 290;
+      const finalZ = (eqZ / dist) * 290;
+
+      return [finalX, finalZ, -finalY];
+
+    }
     // getting har ek planet ki location.
     const geoX = planetHelio.x - earthHelio.x;
     const geoY = planetHelio.y - earthHelio.y;
@@ -508,11 +533,11 @@ const DynamicPlanet = ({ name, textureUrl, size = 3 }) => {
           <sphereGeometry args={[size, 32, 32]} />
           <meshBasicMaterial map={texture} />
         </mesh>
-        
+
         {/* Conditionally render the rings only if this specific planet is Saturn */}
         {name === 'Saturn' && <SaturnRings size={size} />}
       </group>
-      
+
       <Html center zIndexRange={[100, 0]}>
         <div style={{ color: '#ffffff', marginTop: '55px', fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', pointerEvents: 'none' }}>
           {name}
@@ -552,9 +577,9 @@ const GlassSearchBar = () => {
         </svg>
 
         <input
-          type="text" 
-          name="q" 
-          placeholder="Search the web..." 
+          type="text"
+          name="q"
+          placeholder="Search the web..."
           autoComplete="off"
           autoFocus
           style={{
@@ -567,7 +592,7 @@ const GlassSearchBar = () => {
             marginLeft: '16px',
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
             letterSpacing: '0.5px'
-          }} 
+          }}
         />
       </form>
     </div>
