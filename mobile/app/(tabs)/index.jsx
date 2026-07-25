@@ -11,7 +11,7 @@ const SERVER_URL = 'http://10.133.69.114:3000';
 const socket = io(SERVER_URL, {
   autoConnect: true,
 });
-
+// on connection
 socket.on('connect', () => {
   console.log(' MOBILE SOCKET CONNECTED');
 });

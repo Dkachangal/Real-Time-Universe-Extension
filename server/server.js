@@ -34,7 +34,7 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('mobile_data_stream', data);
   });
 
-  // disconnected
+  // disconnected socket connection
   socket.on('disconnect', () => {
     console.log(`\nNode Disconnected: ${socket.id}`);
   });
