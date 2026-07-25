@@ -1,4 +1,4 @@
-# 🌌 Real-Time 3D Planetarium Chrome Extension & AR Controller
+# 🌌 Real-Time 3D Planetarium Chrome Extension & Mobile AR Controller
 
 A custom browser extension that transforms your standard "New Tab" page into a live, interactive 3D planetarium, controlled entirely by your smartphone. Built to bridge the gap between digital workspaces and the night sky, this project renders ~9,000 celestial bodies at their precise, real-time coordinates.
 
