@@ -59,7 +59,7 @@ A custom browser extension that transforms your standard "New Tab" page into a l
 
 **Divyansh Kachangal**
 * GitHub: [@Dkachangal](https://github.com/Dkachangal)
-* LinkedIn: [Divyansh Kachangal](www.linkedin.com/in/dkachangal)
+* LinkedIn: [Divyansh Kachangal](https://www.linkedin.com/in/dkachangal)
 
 ## 📄 License
 
