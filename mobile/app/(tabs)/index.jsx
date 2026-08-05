@@ -7,7 +7,8 @@ import { DeviceMotion } from 'expo-sensors'
 import { io } from 'socket.io-client'
 
 // SOCKET.IO CLIENT SETUP 
-const SERVER_URL = 'http://10.133.69.114:3000'; 
+const IP_ADD = '172.19.73.114';
+const SERVER_URL = `http://${IP_ADD}:3000`; 
 const socket = io(SERVER_URL, {
   autoConnect: true,
 });

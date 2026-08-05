@@ -600,7 +600,8 @@ const GlassSearchBar = () => {
 };
 const App = () => {
   useEffect(() => {
-    const socket = io('http://10.133.69.114:3000');
+    const IP_ADDRESS = '172.19.73.114';
+    const socket = io(`http://${IP_ADDRESS}:3000`);
 
     socket.on('mobile_data_stream', (data) => {
       GLOBAL_CONFIG.LATITUDE = data.latitude;

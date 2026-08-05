@@ -44,7 +44,7 @@ io.on('connection', (socket) => {
 const PORT = 3000;
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`TELEMETRY RELAY SERVER ONLINE 😉`);
+  console.log(`server started...`);
   console.log(`\n`);
   console.log(`Listening for mobile stream on port ${PORT}...\n`);
 });
