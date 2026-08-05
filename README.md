@@ -5,7 +5,7 @@ A custom browser extension that transforms your standard "New Tab" page into a l
 ## ✨ Features
 
 * **Immersive 3D Starfield:** Replaces the default new tab with an interactive 3D universe using React Three Fiber.
-* **Mobile AR Telemetry:** A companion React Native app captures live GPS and IMU sensor data, acting as a physical window into the digital sky.
+* **Mobile AR Telemetry:** A companion React Native mobile app captures live GPS and IMU sensor data, acting as a physical window into the digital sky.
 * **Real-Time Synchronization:** A custom Node.js/Socket.io WebSocket pipeline streams smooth, 360° telemetry across devices at 60 FPS.
 * **Astronomical Accuracy:** Parses the HYG Database to render the ~9,000 naked-eye visible stars out of 120K+ objects.
 * **Custom Shaders:** Utilizes shader materials to dynamically map actual astronomical temperatures to accurate visual star colors.
@@ -58,8 +58,8 @@ A custom browser extension that transforms your standard "New Tab" page into a l
 ## 👨‍💻 Author
 
 **Divyansh Kachangal**
-* GitHub: [@Dkachangal](https://github.com/YourGitHubUsername)
-* LinkedIn: [Divyansh Kachangal](https://linkedin.com/in/YourLinkedInURL)
+* GitHub: [@Dkachangal](https://github.com/Dkachangal)
+* LinkedIn: [Divyansh Kachangal](https://www.linkedin.com/in/dkachangal)
 
 ## 📄 License
 
